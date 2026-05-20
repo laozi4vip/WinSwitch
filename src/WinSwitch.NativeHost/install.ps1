@@ -68,4 +68,4 @@ Write-Host "  1. Load the browser extension in chrome://extensions (Developer mo
 Write-Host "  2. Restart the browser (close all browser windows and reopen)"
 Write-Host ""
 Write-Host "Note: If you changed the extension ID, re-run with:" -ForegroundColor Cyan
-Write-Host "  .\install.ps1 -ExtensionId <your-extension-id>" -ForegroundColor Cyan
+Write-Host "  .\install.ps1 -ExtensionId YOUR_ID_HERE" -ForegroundColor Cyan
