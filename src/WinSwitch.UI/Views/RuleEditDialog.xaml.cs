@@ -265,6 +265,7 @@ public partial class RuleEditDialog : Window
         var isRuleMode = Rule.MatchMode == MatchMode.Rule;
         LblTitlePattern.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
         TxtTitlePattern.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
+        LblTitleHint.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
         LblTitleMatchType.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
         CmbTitleMatchType.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
     }

@@ -1,39 +1,37 @@
 <Window x:Class="WinSwitch.UI.Views.WindowPickerDialog"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="拾取窗口"
-        Width="560" Height="400"
-        WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize">
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="拾取窗口"
+ Width="640" Height="460"
+ WindowStartupLocation="CenterOwner"
+ ResizeMode="NoResize">
 
-    <Grid Margin="12">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+ <Grid Margin="12">
+ <Grid.RowDefinitions>
+ <RowDefinition Height="Auto"/>
+ <RowDefinition Height="Auto"/>
+ <RowDefinition Height="*"/>
+ <RowDefinition Height="Auto"/>
+ </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="选择要绑定的窗口：" Margin="0,0,0,8"/>
+ <TextBlock Grid.Row="0" Text="选择要绑定的窗口（同一进程的多个窗口都会列出）：" Margin="0,0,0,4"/>
 
-        <DataGrid Grid.Row="1"
-                  Name="WindowsDataGrid"
-                  AutoGenerateColumns="False"
-                  CanUserAddRows="False"
-                  CanUserDeleteRows="False"
-                  SelectionMode="Single"
-                  HeadersVisibility="Column">
+ <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+  <TextBlock Text="按进程筛选：" VerticalAlignment="Center" Margin="0,0,8,0"/>
+  <ComboBox Name="CmbProcessFilter" Width="200" SelectionChanged="CmbProcessFilter_SelectionChanged"/>
+  <Button Content="刷新" Click="BtnRefresh_Click" MinWidth="60" Margin="8,0,0,0"/>
+ </StackPanel>
 
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="进程名" Binding="{Binding ProcessName}" Width="120"/>
-                <DataGridTextColumn Header="窗口标题" Binding="{Binding Title}" Width="*"/>
-                <DataGridTextColumn Header="句柄" Binding="{Binding Handle}" Width="80"/>
-            </DataGrid.Columns>
-        </DataGrid>
+ <DataGrid Grid.Row="2" Name="WindowsDataGrid" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Single" HeadersVisibility="Column">
+ <DataGrid.Columns>
+ <DataGridTextColumn Header="进程名" Binding="{Binding ProcessName}" Width="120"/>
+ <DataGridTextColumn Header="窗口标题" Binding="{Binding Title}" Width="*"/>
+ </DataGrid.Columns>
+ </DataGrid>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Name="BtnRefresh" Content="刷新" Click="BtnRefresh_Click" MinWidth="80"/>
-            <Button Content="确定" Click="BtnOk_Click" IsDefault="True" MinWidth="80"/>
-            <Button Content="取消" Click="BtnCancel_Click" IsCancel="True" MinWidth="80"/>
-        </StackPanel>
-    </Grid>
+ <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+ <Button Content="确定" Click="BtnOk_Click" IsDefault="True" MinWidth="80"/>
+ <Button Content="取消" Click="BtnCancel_Click" IsCancel="True" MinWidth="80"/>
+ </StackPanel>
+ </Grid>
 </Window>
