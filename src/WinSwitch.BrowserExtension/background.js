@@ -8,6 +8,10 @@ const NATIVE_HOST_NAME = 'com.winswitch.bridge';
 // 端口连接
 let port = null;
 let reconnectTimer = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;      // 最多自动重连5次
+const RECONNECT_BASE_DELAY = 5000;     // 基础延迟5秒
+const RECONNECT_MAX_DELAY = 60000;     // 最大延迟60秒
 
 /**
  * 连接 Native Messaging Host
@@ -21,19 +25,48 @@ function connectNative() {
     });
 
     port.onDisconnect.addListener(() => {
-      console.warn('[WinSwitch] Native host disconnected:', chrome.runtime.lastError?.message);
+      const errMsg = chrome.runtime.lastError?.message || 'Unknown error';
+      console.warn('[WinSwitch] Native host disconnected:', errMsg);
       port = null;
-      // 5秒后重连
-      reconnectTimer = setTimeout(connectNative, 5000);
+
+      // 如果是"host not found"错误，不无限重试
+      if (errMsg.includes('not found') || errMsg.includes('not registered')) {
+        console.warn('[WinSwitch] Native host not registered. Please run install.ps1 first.');
+        reconnectAttempts = MAX_RECONNECT_ATTEMPTS; // 阻止自动重连
+      }
+
+      scheduleReconnect();
     });
 
     console.log('[WinSwitch] Connected to native host');
+    reconnectAttempts = 0; // 连接成功，重置计数
     // 连接成功后立即发送一次数据
     collectAndSend();
+
   } catch (e) {
     console.error('[WinSwitch] Failed to connect native host:', e);
-    reconnectTimer = setTimeout(connectNative, 5000);
+    scheduleReconnect();
   }
+}
+
+/**
+ * 调度重连（指数退避，有上限）
+ */
+function scheduleReconnect() {
+  if (reconnectTimer) return; // 已有定时器
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    console.warn('[WinSwitch] Max reconnect attempts reached. Will retry when browser restarts or extension reloads.');
+    return;
+  }
+
+  reconnectAttempts++;
+  const delay = Math.min(RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts - 1), RECONNECT_MAX_DELAY);
+  console.log(`[WinSwitch] Reconnecting in ${delay / 1000}s (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectNative();
+  }, delay);
 }
 
 /**
@@ -42,7 +75,6 @@ function connectNative() {
 async function collectAndSend() {
   try {
     const windows = await chrome.windows.getAll({ populate: true });
-
     const data = windows.map(w => ({
       browserWindowId: w.id,
       focused: w.focused,
@@ -59,7 +91,6 @@ async function collectAndSend() {
         favIconUrl: t.favIconUrl || ''
       }))
     }));
-
     sendToNative(data);
   } catch (e) {
     console.error('[WinSwitch] Error collecting window data:', e);
@@ -71,18 +102,19 @@ async function collectAndSend() {
  */
 function sendToNative(data) {
   if (!port) {
-    console.warn('[WinSwitch] Port not connected, skipping send');
+    // 静默跳过，不打印大量警告
     return;
   }
-
   try {
-    port.postMessage({ type: 'browserInfo', windows: data, timestamp: Date.now() });
+    port.postMessage({
+      type: 'browserInfo',
+      windows: data,
+      timestamp: Date.now()
+    });
   } catch (e) {
     console.error('[WinSwitch] Error sending to native host:', e);
     port = null;
-    if (!reconnectTimer) {
-      reconnectTimer = setTimeout(connectNative, 5000);
-    }
+    scheduleReconnect();
   }
 }
 
@@ -107,7 +139,7 @@ chrome.windows.onCreated.addListener(collectAndSend);
 chrome.windows.onRemoved.addListener(collectAndSend);
 chrome.windows.onFocusChanged.addListener(collectAndSend);
 
-// 窗口位置/大小变化（通过定时轮询检测，chrome.windows 没有 onBoundsChanged）
+// 窗口位置/大小变化（定时轮询，chrome.windows 没有 onBoundsChanged）
 let boundsPollTimer = null;
 let lastBounds = {};
 
@@ -134,11 +166,19 @@ function startBoundsPolling() {
 }
 
 // ========== 启动 ==========
+
 connectNative();
 startBoundsPolling();
 
 // 扩展安装/更新时触发
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[WinSwitch] Extension installed/updated');
+  // 重置重连计数，尝试连接
+  reconnectAttempts = 0;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  connectNative();
   collectAndSend();
 });
