@@ -72,7 +72,19 @@ public partial class App : Application
             // 创建主窗口
             var mainWindow = new Views.MainWindow();
             Current.MainWindow = mainWindow;
-            mainWindow.Show();
+
+            // 静默启动：开机自启时不显示主窗口（窗口句柄仍会创建，快捷键可注册）
+            if (!ConfigService.Config.SilentLaunch)
+            {
+                mainWindow.Show();
+            }
+            else
+            {
+                mainWindow.WindowState = WindowState.Minimized;
+                mainWindow.Show();
+                mainWindow.Hide();
+                LogService.Instance.Info("静默启动模式，主窗口已隐藏到托盘");
+            }
 
             // 注册快捷键（需要窗口句柄）
             HotkeyService.SetWindowHandle(
