@@ -102,9 +102,8 @@ public partial class App : Application
             var rule = ConfigService.Config.Rules.FirstOrDefault(r => r.Id == ruleId);
             if (rule != null)
             {
-                // V2: 如果有浏览器扩展数据且规则使用浏览器匹配模式，优先使用扩展数据
-                if (BrowserBridge.BrowserWindows.Count > 0 &&
-                    rule.BrowserMatchMode != BrowserMatchMode.ActiveTabTitle)
+                // V2: 有浏览器扩展缓存数据时，全部走扩展路径
+                if (BrowserBridge.HasData)
                 {
                     SwitchWithBrowserData(rule);
                 }
@@ -143,10 +142,12 @@ public partial class App : Application
             bw.MatchedHwnd = IntPtr.Zero;
         BrowserBridge.MatchBrowserWindowsToHwnd(win32Windows);
 
+        // 级1: 用已匹配的 HWND 操作窗口
         foreach (var bw in matchedWindows)
         {
             if (bw.MatchedHwnd != IntPtr.Zero)
             {
+                LogService.Instance.Info($"扩展模式操作窗口(级1-HWND): HWND={bw.MatchedHwnd}");
                 if (WindowEnumerator.IsForegroundWindow(bw.MatchedHwnd))
                 {
                     NativeMethods.ShowWindow(bw.MatchedHwnd, NativeMethods.SW_MINIMIZE);
@@ -160,7 +161,61 @@ public partial class App : Application
             }
         }
 
-        // 没有匹配到 HWND，回退
+        // 级2: 用活动标签页标题在Win32窗口列表中查找
+        LogService.Instance.Info("级1-HWND映射失败，尝试用标签页标题查找");
+        foreach (var bw in matchedWindows)
+        {
+            var activeTab = bw.Tabs.FirstOrDefault(t => t.Active);
+            if (activeTab != null && !string.IsNullOrEmpty(activeTab.Title))
+            {
+                var winByTitle = win32Windows.FirstOrDefault(w =>
+                    w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase) &&
+                    (w.ProcessName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
+                     w.ProcessName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
+                     w.ProcessName.Equals("brave", StringComparison.OrdinalIgnoreCase) ||
+                     w.ProcessName.Equals("vivaldi", StringComparison.OrdinalIgnoreCase) ||
+                     w.ProcessName.Equals("opera", StringComparison.OrdinalIgnoreCase) ||
+                     w.ProcessName.Equals("firefox", StringComparison.OrdinalIgnoreCase)));
+                if (winByTitle != null && winByTitle.Handle != IntPtr.Zero)
+                {
+                    LogService.Instance.Info($"扩展模式操作窗口(级2-标题): HWND={winByTitle.Handle}, 标题='{winByTitle.Title}'");
+                    if (WindowEnumerator.IsForegroundWindow(winByTitle.Handle))
+                        NativeMethods.ShowWindow(winByTitle.Handle, NativeMethods.SW_MINIMIZE);
+                    else
+                    {
+                        NativeMethods.ShowWindow(winByTitle.Handle, NativeMethods.SW_RESTORE);
+                        NativeMethods.SetForegroundWindow(winByTitle.Handle);
+                    }
+                    return;
+                }
+            }
+        }
+
+        // 级3: 用规则关键词在浏览器进程窗口中查找
+        LogService.Instance.Info("级2-标题查找失败，用规则关键词在浏览器窗口中查找");
+        var keywordMatch = win32Windows.FirstOrDefault(w =>
+            (w.ProcessName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
+             w.ProcessName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
+             w.ProcessName.Equals("brave", StringComparison.OrdinalIgnoreCase) ||
+             w.ProcessName.Equals("vivaldi", StringComparison.OrdinalIgnoreCase) ||
+             w.ProcessName.Equals("opera", StringComparison.OrdinalIgnoreCase) ||
+             w.ProcessName.Equals("firefox", StringComparison.OrdinalIgnoreCase)) &&
+            WindowEnumerator.IsTitleMatch(w.Title, rule.TitlePattern, rule.TitleMatchType));
+        if (keywordMatch != null && keywordMatch.Handle != IntPtr.Zero)
+        {
+            LogService.Instance.Info($"扩展模式操作窗口(级3-关键词): HWND={keywordMatch.Handle}, 标题='{keywordMatch.Title}'");
+            if (WindowEnumerator.IsForegroundWindow(keywordMatch.Handle))
+                NativeMethods.ShowWindow(keywordMatch.Handle, NativeMethods.SW_MINIMIZE);
+            else
+            {
+                NativeMethods.ShowWindow(keywordMatch.Handle, NativeMethods.SW_RESTORE);
+                NativeMethods.SetForegroundWindow(keywordMatch.Handle);
+            }
+            return;
+        }
+
+        // 级4: 全部失败，回退Win32模式
+        LogService.Instance.Info("所有扩展匹配策略均失败，回退Win32模式");
         WindowSwitcher.Switch(rule);
     }
 
