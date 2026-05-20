@@ -39,34 +39,21 @@ public class TitleMatchTypeConverter : IValueConverter
         => throw new NotImplementedException();
 }
 
-/// <summary>
-/// 布尔转中文
-/// </summary>
-public class BoolToChineseConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => value is true ? "✓" : "✗";
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotImplementedException();
-}
-
 public partial class MainWindow : Window
 {
     private ObservableCollection<WindowRule> _rulesCollection = new();
+
     public MainWindow()
     {
         InitializeComponent();
         LoadRules();
         UpdateBossKeyDisplay();
-
         App.ConfigService.ConfigChanged += OnConfigChanged;
         App.BossKeyService.BossKeyToggled += OnBossKeyToggled;
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
-        // 关闭窗口时隐藏到托盘而不是退出
         e.Cancel = true;
         this.Hide();
         TrayIconManager.ShowBalloonTip("WinSwitch", "程序已最小化到托盘");
@@ -110,11 +97,12 @@ public partial class MainWindow : Window
 
     private void BtnAddRule_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new RuleEditDialog();
+        var dialog = new RuleEditDialog { Owner = this };
         if (dialog.ShowDialog() == true)
         {
             App.ConfigService.AddRule(dialog.Rule);
             App.HotkeyService.RegisterAll(App.ConfigService.Config);
+            LoadRules();
             LogService.Instance.Info($"添加规则: {dialog.Rule.Name}");
         }
     }
@@ -126,12 +114,12 @@ public partial class MainWindow : Window
             MessageBox.Show("请先选择一条规则", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-
-        var dialog = new RuleEditDialog(selectedRule);
+        var dialog = new RuleEditDialog(selectedRule) { Owner = this };
         if (dialog.ShowDialog() == true)
         {
             App.ConfigService.UpdateRule(dialog.Rule);
             App.HotkeyService.RegisterAll(App.ConfigService.Config);
+            LoadRules();
             LogService.Instance.Info($"更新规则: {dialog.Rule.Name}");
         }
     }
@@ -143,21 +131,19 @@ public partial class MainWindow : Window
             MessageBox.Show("请先选择一条规则", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-
-        var result = MessageBox.Show($"确定删除规则 \"{selectedRule.Name}\"？",
-            "确认删除", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
+        var result = MessageBox.Show($"确定删除规则 \"{selectedRule.Name}\"？", "确认删除", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (result == MessageBoxResult.Yes)
         {
             App.ConfigService.RemoveRule(selectedRule.Id);
             App.HotkeyService.RegisterAll(App.ConfigService.Config);
+            LoadRules();
             LogService.Instance.Info($"删除规则: {selectedRule.Name}");
         }
     }
 
     private void BtnPickWindow_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new WindowPickerDialog();
+        var dialog = new WindowPickerDialog { Owner = this };
         if (dialog.ShowDialog() == true && dialog.SelectedWindow != null)
         {
             var rule = new WindowRule
@@ -168,19 +154,19 @@ public partial class MainWindow : Window
                 CachedHandle = dialog.SelectedWindow.Handle,
                 Hotkey = string.Empty
             };
-
-            var editDialog = new RuleEditDialog(rule);
+            var editDialog = new RuleEditDialog(rule) { Owner = this };
             if (editDialog.ShowDialog() == true)
             {
                 App.ConfigService.AddRule(editDialog.Rule);
                 App.HotkeyService.RegisterAll(App.ConfigService.Config);
+                LoadRules();
             }
         }
     }
 
     private void BtnBossKeySettings_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new BossKeySettingsDialog(App.ConfigService.Config);
+        var dialog = new BossKeySettingsDialog(App.ConfigService.Config) { Owner = this };
         if (dialog.ShowDialog() == true)
         {
             App.ConfigService.UpdateBossKey(dialog.BossKey, dialog.BossKeyMode);
@@ -197,8 +183,6 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-
-        // 获取当前窗口的 HwndSource 并添加 WM_HOTKEY 消息钩子
         var helper = System.Windows.Interop.HwndSource.FromHwnd(
             new System.Windows.Interop.WindowInteropHelper(this).Handle);
         helper?.AddHook(WndProc);
@@ -212,7 +196,6 @@ public partial class MainWindow : Window
             App.HotkeyService.ProcessHotkeyMessage(hotkeyId);
             handled = true;
         }
-
         return IntPtr.Zero;
     }
 }

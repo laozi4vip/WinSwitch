@@ -48,6 +48,7 @@
         <TextBlock Grid.Row="4" Grid.Column="0" Text="标题规则" VerticalAlignment="Center"
                    Name="LblTitlePattern"/>
         <TextBox Grid.Row="4" Grid.Column="1" Name="TxtTitlePattern" Margin="4"/>
+      <TextBlock Grid.Row="4" Grid.Column="1" Margin="4,28,4,0" Text="包含模式支持分号分隔多关键词，如: Chrome;Edge" Opacity="0.5" FontSize="11"/>
 
         <!-- 标题匹配方式 -->
         <TextBlock Grid.Row="5" Grid.Column="0" Text="匹配方式" VerticalAlignment="Center"
