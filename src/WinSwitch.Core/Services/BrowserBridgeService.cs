@@ -123,6 +123,18 @@ public class BrowserBridgeService : IDisposable
             {
                 BrowserWindows = msg.Windows;
                 LastSyncTime = DateTime.UtcNow;
+                // 详细日志：每个窗口的标签页数量
+                foreach (var bw in BrowserWindows)
+                {
+                    LogService.Instance.Debug($"浏览器窗口 {bw.BrowserWindowId}: {bw.Tabs?.Count ?? 0} 个标签页, 焦点={bw.Focused}, 位置=({bw.Left},{bw.Top}), 大小={bw.Width}x{bw.Height}");
+                    if (bw.Tabs != null)
+                    {
+                        foreach (var tab in bw.Tabs)
+                        {
+                            LogService.Instance.Debug($"  标签页 {tab.TabId}: title='{tab.Title}', url='{tab.Url}', active={tab.Active}");
+                        }
+                    }
+                }
                 BrowserDataUpdated?.Invoke();
                 LogService.Instance.Debug($"收到浏览器数据: {BrowserWindows.Count} 个窗口");
             }
@@ -162,29 +174,29 @@ public class BrowserBridgeService : IDisposable
 
     private static bool MatchAnyTabTitle(BrowserWindowInfo bw, WindowRule rule)
     {
-        // 任意标签页标题匹配：窗口中至少有N个标签页命中关键词（N=关键词数量，最少1个）
-        // 如果关键词只有一个，则任意标签页命中即匹配
-        // 如果关键词有多个（分号分隔），则窗口中至少需要匹配2个不同的标签页
+        // 任意标签页标题匹配
+        // 单关键词：任意标签页命中即匹配（与 ActiveTabTitle 不同的是扫描所有标签页而非仅活动标签页）
+        // 多关键词（分号分隔）：窗口中至少需要匹配2个不同的标签页
         var keywords = rule.TitlePattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        
         if (keywords.Length <= 1)
         {
             // 单关键词：任意标签页命中即可
-            return bw.Tabs.Any(tab => WindowEnumerator.IsTitleMatch(tab.Title, rule.TitlePattern, rule.TitleMatchType));
+            return bw.Tabs.Any(tab => !string.IsNullOrEmpty(tab.Title) && 
+                WindowEnumerator.IsTitleMatch(tab.Title, rule.TitlePattern, rule.TitleMatchType));
         }
         
         // 多关键词：至少需要匹配2个不同的标签页
-        var matchedTabs = new HashSet<int>();
+        int matchedCount = 0;
         foreach (var tab in bw.Tabs)
         {
-            foreach (var kw in keywords)
+            if (string.IsNullOrEmpty(tab.Title)) continue;
+            bool tabMatched = keywords.Any(kw => tab.Title.Contains(kw, StringComparison.OrdinalIgnoreCase));
+            if (tabMatched)
             {
-                if (!string.IsNullOrEmpty(kw) && tab.Title.Contains(kw, StringComparison.OrdinalIgnoreCase))
-                {
-                    matchedTabs.Add(tab.TabId);
-                    break; // 每个标签页只计一次
-                }
+                matchedCount++;
+                if (matchedCount >= 2) return true;
             }
-            if (matchedTabs.Count >= 2) return true;
         }
         return false;
     }
@@ -207,24 +219,67 @@ public class BrowserBridgeService : IDisposable
     }
 
     /// <summary>
-    /// 将浏览器窗口与 Win32 HWND 关联（通过窗口位置匹配，容差±10像素）
+    /// 将浏览器窗口与 Win32 HWND 关联
+    /// 策略1: 进程名匹配（最可靠）— 找所有 Chrome/Edge 进程的窗口
+    /// 策略2: 位置+宽高匹配（容差±30像素）— 处理最小化窗口位置偏移
+    /// 策略3: 窗口类名匹配（Chrome_MainWnd / Edge_MainWnd）
     /// </summary>
     public void MatchBrowserWindowsToHwnd(List<WindowInfo> win32Windows)
     {
+        // 收集所有浏览器进程的窗口（Chrome、Edge、Brave 等 Chromium 系）
+        var browserProcessNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "chrome", "msedge", "brave", "vivaldi", "opera", "firefox"
+        };
+        
+        var browserWindows = win32Windows
+            .Where(w => browserProcessNames.Contains(w.ProcessName))
+            .ToList();
+        
         foreach (var bw in BrowserWindows)
         {
-            if (bw.MatchedHwnd != IntPtr.Zero) continue; // 已关联
-
-            var matched = win32Windows.FirstOrDefault(w =>
-                Math.Abs(w.Left - bw.Left) <= 10 &&
-                Math.Abs(w.Top - bw.Top) <= 10 &&
-                Math.Abs(w.Width - bw.Width) <= 10 &&
-                Math.Abs(w.Height - bw.Height) <= 10);
-
-            if (matched != null)
+            if (bw.MatchedHwnd != IntPtr.Zero) continue;
+            
+            // 策略1: 非最小化窗口，用位置+宽高匹配（容差±30像素）
+            if (bw.State != "minimized")
             {
-                bw.MatchedHwnd = matched.Handle;
+                var posMatched = browserWindows.FirstOrDefault(w =>
+                    Math.Abs(w.Left - bw.Left) <= 30 &&
+                    Math.Abs(w.Top - bw.Top) <= 30 &&
+                    Math.Abs(w.Width - bw.Width) <= 30 &&
+                    Math.Abs(w.Height - bw.Height) <= 30);
+                if (posMatched != null)
+                {
+                    bw.MatchedHwnd = posMatched.Handle;
+                    LogService.Instance.Debug($"HWND匹配(位置): 浏览器窗口{bw.BrowserWindowId} -> HWND {posMatched.Handle}");
+                    continue;
+                }
             }
+            
+            // 策略2: 用浏览器窗口标题与 Win32 窗口标题匹配
+            // Chrome 窗口标题 = 当前活动标签页标题 + " - Google Chrome"
+            var activeTab = bw.Tabs.FirstOrDefault(t => t.Active);
+            if (activeTab != null && !string.IsNullOrEmpty(activeTab.Title))
+            {
+                var titleMatched = browserWindows.FirstOrDefault(w =>
+                    w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase));
+                if (titleMatched != null)
+                {
+                    bw.MatchedHwnd = titleMatched.Handle;
+                    LogService.Instance.Debug($"HWND匹配(标题): 浏览器窗口{bw.BrowserWindowId} -> HWND {titleMatched.Handle}");
+                    continue;
+                }
+            }
+            
+            // 策略3: 如果只有一个浏览器窗口且只有一个 Win32 浏览器窗口，直接关联
+            if (BrowserWindows.Count == 1 && browserWindows.Count >= 1)
+            {
+                bw.MatchedHwnd = browserWindows[0].Handle;
+                LogService.Instance.Debug($"HWND匹配(唯一): 浏览器窗口{bw.BrowserWindowId} -> HWND {browserWindows[0].Handle}");
+                continue;
+            }
+            
+            LogService.Instance.Debug($"HWND匹配失败: 浏览器窗口{bw.BrowserWindowId}, state={bw.State}, pos=({bw.Left},{bw.Top}), size={bw.Width}x{bw.Height}");
         }
     }
 
