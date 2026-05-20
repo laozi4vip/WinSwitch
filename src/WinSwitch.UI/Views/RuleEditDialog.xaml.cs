@@ -136,10 +136,11 @@ public partial class RuleEditDialog : Window
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) modifiers |= 0x0004;
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Windows)) modifiers |= 0x0008;
 
-        // 至少需要一个修饰键
-        if (modifiers == 0)
+        // 至少需要一个修饰键，除非是 F1-F12
+        bool isFunctionKey = key >= Key.F1 && key <= Key.F12;
+        if (modifiers == 0 && !isFunctionKey)
         {
-            TxtHotkey.Text = "需要至少一个修饰键(Ctrl/Alt/Shift/Win)";
+            TxtHotkey.Text = "需要修饰键(Ctrl/Alt/Shift/Win)或F1-F12";
             return;
         }
 
@@ -150,7 +151,14 @@ public partial class RuleEditDialog : Window
         _capturedModifiers = modifiers;
         _capturedVk = vk;
 
-        TxtHotkey.Text = BuildHotkeyString(modifiers, vk);
+        var hotkeyStr = BuildHotkeyString(modifiers, vk);
+        TxtHotkey.Text = hotkeyStr;
+
+        // 实时检测快捷键冲突
+        if (App.ConfigService.IsHotkeyConflict(hotkeyStr, Rule.Id))
+        {
+            TxtHotkey.Text = $"{hotkeyStr} ⚠️ 快捷键已被占用";
+        }
 
         // 捕获完成，移除焦点
         TxtProcessName.Focus();
