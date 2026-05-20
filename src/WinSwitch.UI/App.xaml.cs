@@ -51,7 +51,7 @@ public partial class App : Application
         {
             // 初始化服务
             WindowSwitcher = new WindowSwitcher(WindowEnumerator);
-            BossKeyService = new BossKeyService(WindowEnumerator, ConfigService);
+            BossKeyService = new BossKeyService(WindowEnumerator, ConfigService, BrowserBridge);
 
             // 加载配置
             ConfigService.Load();
