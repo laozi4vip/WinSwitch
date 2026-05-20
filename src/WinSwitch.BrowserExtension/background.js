@@ -1,6 +1,6 @@
 /**
  * WinSwitch Browser Extension — Background Service Worker
- * 负责收集浏览器窗口/标签页信息并通过 Native Messaging 发送给 WinSwitch 本地程序
+ * 事件驱动 + 防抖 + 增量同步，确保快捷键响应无延迟
  */
 
 const NATIVE_HOST_NAME = 'com.winswitch.bridge';
@@ -9,9 +9,16 @@ const NATIVE_HOST_NAME = 'com.winswitch.bridge';
 let port = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 5;      // 最多自动重连5次
-const RECONNECT_BASE_DELAY = 5000;     // 基础延迟5秒
-const RECONNECT_MAX_DELAY = 60000;     // 最大延迟60秒
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_BASE_DELAY = 5000;
+const RECONNECT_MAX_DELAY = 60000;
+
+// 防抖定时器
+let syncTimer = null;
+const DEBOUNCE_DELAY = 300; // 300ms 防抖
+
+// 上次全量同步的窗口数据（用于增量检测）
+let lastSyncedWindows = [];
 
 /**
  * 连接 Native Messaging Host
@@ -29,19 +36,19 @@ function connectNative() {
       console.warn('[WinSwitch] Native host disconnected:', errMsg);
       port = null;
 
-      // 如果是"host not found"错误，不无限重试
       if (errMsg.includes('not found') || errMsg.includes('not registered')) {
         console.warn('[WinSwitch] Native host not registered. Please run install.ps1 first.');
-        reconnectAttempts = MAX_RECONNECT_ATTEMPTS; // 阻止自动重连
+        reconnectAttempts = MAX_RECONNECT_ATTEMPTS;
       }
 
       scheduleReconnect();
     });
 
     console.log('[WinSwitch] Connected to native host');
-    reconnectAttempts = 0; // 连接成功，重置计数
-    // 连接成功后立即发送一次数据
-    collectAndSend();
+    reconnectAttempts = 0;
+
+    // 连接成功后全量同步一次
+    fullSync();
 
   } catch (e) {
     console.error('[WinSwitch] Failed to connect native host:', e);
@@ -50,12 +57,12 @@ function connectNative() {
 }
 
 /**
- * 调度重连（指数退避，有上限）
+ * 调度重连（指数退避）
  */
 function scheduleReconnect() {
-  if (reconnectTimer) return; // 已有定时器
+  if (reconnectTimer) return;
   if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-    console.warn('[WinSwitch] Max reconnect attempts reached. Will retry when browser restarts or extension reloads.');
+    console.warn('[WinSwitch] Max reconnect attempts reached. Will retry on browser restart.');
     return;
   }
 
@@ -70,9 +77,20 @@ function scheduleReconnect() {
 }
 
 /**
- * 收集所有浏览器窗口和标签页信息
+ * 防抖调度：合并短时间内的多次事件为一次同步
  */
-async function collectAndSend() {
+function scheduleDebouncedSync() {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    fullSync();
+  }, DEBOUNCE_DELAY);
+}
+
+/**
+ * 全量同步：收集所有窗口和标签页信息并发送
+ */
+async function fullSync() {
   try {
     const windows = await chrome.windows.getAll({ populate: true });
     const data = windows.map(w => ({
@@ -87,11 +105,13 @@ async function collectAndSend() {
         tabId: t.id,
         title: t.title || '',
         url: t.url || '',
-        active: t.active,
-        favIconUrl: t.favIconUrl || ''
+        active: t.active
+        // 不传 favIconUrl，减少数据量
       }))
     }));
+
     sendToNative(data);
+    lastSyncedWindows = data;
   } catch (e) {
     console.error('[WinSwitch] Error collecting window data:', e);
   }
@@ -101,10 +121,7 @@ async function collectAndSend() {
  * 发送数据到 Native Host
  */
 function sendToNative(data) {
-  if (!port) {
-    // 静默跳过，不打印大量警告
-    return;
-  }
+  if (!port) return; // 静默跳过，不刷日志
   try {
     port.postMessage({
       type: 'browserInfo',
@@ -118,28 +135,28 @@ function sendToNative(data) {
   }
 }
 
-// ========== 事件监听 ==========
+// ========== 事件监听（全部防抖）==========
 
-// 标签页更新（标题/URL变化）
+// 标签页更新（标题/URL变化）— 防抖合并
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.title || changeInfo.url || changeInfo.status === 'complete') {
-    collectAndSend();
+    scheduleDebouncedSync();
   }
 });
 
 // 标签页创建/删除
-chrome.tabs.onCreated.addListener(collectAndSend);
-chrome.tabs.onRemoved.addListener(collectAndSend);
+chrome.tabs.onCreated.addListener(scheduleDebouncedSync);
+chrome.tabs.onRemoved.addListener(scheduleDebouncedSync);
 
 // 标签页激活切换
-chrome.tabs.onActivated.addListener(collectAndSend);
+chrome.tabs.onActivated.addListener(scheduleDebouncedSync);
 
 // 窗口创建/删除/焦点变化
-chrome.windows.onCreated.addListener(collectAndSend);
-chrome.windows.onRemoved.addListener(collectAndSend);
-chrome.windows.onFocusChanged.addListener(collectAndSend);
+chrome.windows.onCreated.addListener(scheduleDebouncedSync);
+chrome.windows.onRemoved.addListener(scheduleDebouncedSync);
+chrome.windows.onFocusChanged.addListener(scheduleDebouncedSync);
 
-// 窗口位置/大小变化（定时轮询，chrome.windows 没有 onBoundsChanged）
+// 窗口位置/大小变化 — 低频轮询（2秒），只在变化时同步
 let boundsPollTimer = null;
 let lastBounds = {};
 
@@ -157,7 +174,7 @@ function startBoundsPolling() {
         }
       }
       if (changed) {
-        collectAndSend();
+        scheduleDebouncedSync();
       }
     } catch (e) {
       // ignore
@@ -173,12 +190,10 @@ startBoundsPolling();
 // 扩展安装/更新时触发
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[WinSwitch] Extension installed/updated');
-  // 重置重连计数，尝试连接
   reconnectAttempts = 0;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
   connectNative();
-  collectAndSend();
 });

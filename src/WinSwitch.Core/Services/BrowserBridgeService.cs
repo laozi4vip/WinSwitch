@@ -5,7 +5,9 @@ using WinSwitch.Core.Models;
 namespace WinSwitch.Core.Services;
 
 /// <summary>
-/// 浏览器桥接服务 — 通过命名管道接收浏览器扩展发送的窗口/标签页信息
+/// 浏览器桥接服务 — 事件驱动同步 + 本地缓存 + 快捷键直接查缓存
+/// 扩展平时维护浏览器状态 → 变化时同步给 WinSwitch → WinSwitch 保存缓存
+/// 快捷键触发时只查缓存，不等待扩展，确保响应无延迟
 /// </summary>
 public class BrowserBridgeService : IDisposable
 {
@@ -15,9 +17,14 @@ public class BrowserBridgeService : IDisposable
     private Task? _listenTask;
 
     /// <summary>
-    /// 最新接收到的浏览器窗口信息
+    /// 最新接收到的浏览器窗口信息（本地缓存）
     /// </summary>
     public List<BrowserWindowInfo> BrowserWindows { get; private set; } = new();
+
+    /// <summary>
+    /// 最后一次收到浏览器数据的时间
+    /// </summary>
+    public DateTime LastSyncTime { get; private set; } = DateTime.MinValue;
 
     /// <summary>
     /// 浏览器数据更新事件
@@ -28,6 +35,21 @@ public class BrowserBridgeService : IDisposable
     /// 是否已连接到浏览器扩展
     /// </summary>
     public bool IsConnected => _pipeServer?.IsConnected == true;
+
+    /// <summary>
+    /// 缓存是否新鲜（5秒内同步过）
+    /// </summary>
+    public bool IsCacheFresh => (DateTime.UtcNow - LastSyncTime).TotalSeconds < 5;
+
+    /// <summary>
+    /// 缓存是否可用（60秒内同步过）
+    /// </summary>
+    public bool IsCacheUsable => (DateTime.UtcNow - LastSyncTime).TotalSeconds < 60;
+
+    /// <summary>
+    /// 是否有浏览器数据
+    /// </summary>
+    public bool HasData => BrowserWindows.Count > 0;
 
     public void Start()
     {
@@ -46,23 +68,17 @@ public class BrowserBridgeService : IDisposable
                     PipeName, PipeDirection.In, 1,
                     PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
 
-                // 等待 Native Host 连接
                 await _pipeServer.WaitForConnectionAsync(ct);
                 LogService.Instance.Info("浏览器扩展已连接");
 
-                // 持续读取消息
                 while (_pipeServer.IsConnected && !ct.IsCancellationRequested)
                 {
                     var message = await ReadMessageAsync(_pipeServer, ct);
                     if (message == null) break;
-
                     ProcessMessage(message);
                 }
             }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+            catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
                 LogService.Instance.Info($"BrowserBridge 连接异常: {ex.Message}，3秒后重连...");
@@ -76,9 +92,6 @@ public class BrowserBridgeService : IDisposable
         }
     }
 
-    /// <summary>
-    /// 从管道读取消息（4字节长度前缀 + JSON）
-    /// </summary>
     private static async Task<string?> ReadMessageAsync(NamedPipeServerStream pipe, CancellationToken ct)
     {
         try
@@ -86,10 +99,8 @@ public class BrowserBridgeService : IDisposable
             var lengthBytes = new byte[4];
             var read = await pipe.ReadAsync(lengthBytes, 0, 4, ct);
             if (read < 4) return null;
-
             var length = BitConverter.ToUInt32(lengthBytes, 0);
             if (length == 0 || length > 10 * 1024 * 1024) return null;
-
             var msgBytes = new byte[length];
             var totalRead = 0;
             while (totalRead < length)
@@ -98,18 +109,11 @@ public class BrowserBridgeService : IDisposable
                 if (r == 0) return null;
                 totalRead += r;
             }
-
             return System.Text.Encoding.UTF8.GetString(msgBytes);
         }
-        catch
-        {
-            return null;
-        }
+        catch { return null; }
     }
 
-    /// <summary>
-    /// 处理接收到的浏览器数据
-    /// </summary>
     private void ProcessMessage(string json)
     {
         try
@@ -118,6 +122,7 @@ public class BrowserBridgeService : IDisposable
             if (msg?.Type == "browserInfo" && msg.Windows != null)
             {
                 BrowserWindows = msg.Windows;
+                LastSyncTime = DateTime.UtcNow;
                 BrowserDataUpdated?.Invoke();
                 LogService.Instance.Debug($"收到浏览器数据: {BrowserWindows.Count} 个窗口");
             }
@@ -129,13 +134,11 @@ public class BrowserBridgeService : IDisposable
     }
 
     /// <summary>
-    /// 查找匹配指定规则的浏览器窗口
-    /// 支持三种匹配模式：当前标签页标题、任意标签页标题、任意标签页URL
+    /// 查找匹配指定规则的浏览器窗口（直接查缓存，不请求扩展）
     /// </summary>
     public List<BrowserWindowInfo> FindMatchingBrowserWindows(WindowRule rule)
     {
         var result = new List<BrowserWindowInfo>();
-
         foreach (var bw in BrowserWindows)
         {
             bool matched = rule.BrowserMatchMode switch
@@ -145,46 +148,29 @@ public class BrowserBridgeService : IDisposable
                 BrowserMatchMode.AnyTabUrl => MatchAnyTabUrl(bw, rule),
                 _ => MatchActiveTab(bw, rule)
             };
-
-            if (matched)
-            {
-                result.Add(bw);
-            }
+            if (matched) result.Add(bw);
         }
-
         return result;
     }
 
-    /// <summary>
-    /// 方式一：匹配当前活动标签页标题
-    /// </summary>
     private static bool MatchActiveTab(BrowserWindowInfo bw, WindowRule rule)
     {
         var activeTab = bw.Tabs.FirstOrDefault(t => t.Active);
         if (activeTab == null) return false;
-
         return WindowEnumerator.IsTitleMatch(activeTab.Title, rule.TitlePattern, rule.TitleMatchType);
     }
 
-    /// <summary>
-    /// 方式二：匹配任意标签页标题
-    /// </summary>
     private static bool MatchAnyTabTitle(BrowserWindowInfo bw, WindowRule rule)
     {
         return bw.Tabs.Any(tab => WindowEnumerator.IsTitleMatch(tab.Title, rule.TitlePattern, rule.TitleMatchType));
     }
 
-    /// <summary>
-    /// 方式三：匹配任意标签页 URL
-    /// </summary>
     private static bool MatchAnyTabUrl(BrowserWindowInfo bw, WindowRule rule)
     {
         if (string.IsNullOrEmpty(rule.UrlPattern)) return false;
-
         return bw.Tabs.Any(tab =>
         {
             if (string.IsNullOrEmpty(tab.Url)) return false;
-
             return rule.UrlMatchType switch
             {
                 UrlMatchType.Contains => tab.Url.Contains(rule.UrlPattern, StringComparison.OrdinalIgnoreCase),
@@ -197,17 +183,19 @@ public class BrowserBridgeService : IDisposable
     }
 
     /// <summary>
-    /// 将浏览器窗口与 Win32 HWND 关联（通过窗口位置匹配）
+    /// 将浏览器窗口与 Win32 HWND 关联（通过窗口位置匹配，容差±10像素）
     /// </summary>
     public void MatchBrowserWindowsToHwnd(List<WindowInfo> win32Windows)
     {
         foreach (var bw in BrowserWindows)
         {
-            // 通过窗口位置匹配（容差±10像素）
+            if (bw.MatchedHwnd != IntPtr.Zero) continue; // 已关联
+
             var matched = win32Windows.FirstOrDefault(w =>
                 Math.Abs(w.Left - bw.Left) <= 10 &&
                 Math.Abs(w.Top - bw.Top) <= 10 &&
-                Math.Abs((w.ExStyle & 0) - 0) >= 0); // 简单匹配
+                Math.Abs(w.Width - bw.Width) <= 10 &&
+                Math.Abs(w.Height - bw.Height) <= 10);
 
             if (matched != null)
             {
@@ -223,17 +211,12 @@ public class BrowserBridgeService : IDisposable
         _cts?.Dispose();
     }
 
-    /// <summary>
-    /// 浏览器桥接消息格式
-    /// </summary>
     private class BrowserBridgeMessage
     {
         [JsonProperty("type")]
         public string Type { get; set; } = string.Empty;
-
         [JsonProperty("windows")]
         public List<BrowserWindowInfo>? Windows { get; set; }
-
         [JsonProperty("timestamp")]
         public long Timestamp { get; set; }
     }

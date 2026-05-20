@@ -117,10 +117,17 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// 使用浏览器扩展数据进行窗口切换（V2新增）
+    /// 使用浏览器扩展数据进行窗口切换（V2优化版）
+    /// 快捷键只查本地缓存，不等待扩展实时返回，确保响应无延迟
     /// </summary>
     private void SwitchWithBrowserData(WindowRule rule)
     {
+        // 缓存过期提示（但不阻塞操作）
+        if (!BrowserBridge.IsCacheUsable)
+        {
+            LogService.Instance.Info("浏览器缓存数据已过期，结果可能不准确");
+        }
+
         var matchedWindows = BrowserBridge.FindMatchingBrowserWindows(rule);
         if (matchedWindows.Count == 0)
         {
@@ -129,8 +136,11 @@ public partial class App : Application
             return;
         }
 
-        // 将浏览器窗口与 Win32 HWND 关联
+        // 将浏览器窗口与 Win32 HWND 关联（每次都刷新位置映射）
         var win32Windows = WindowEnumerator.EnumerateAllWindows();
+        // 重置已关联的 HWND，重新匹配
+        foreach (var bw in BrowserBridge.BrowserWindows)
+            bw.MatchedHwnd = IntPtr.Zero;
         BrowserBridge.MatchBrowserWindowsToHwnd(win32Windows);
 
         foreach (var bw in matchedWindows)
@@ -139,16 +149,14 @@ public partial class App : Application
             {
                 if (WindowEnumerator.IsForegroundWindow(bw.MatchedHwnd))
                 {
-                    // 前台 → 最小化
                     NativeMethods.ShowWindow(bw.MatchedHwnd, NativeMethods.SW_MINIMIZE);
                 }
                 else
                 {
-                    // 非前台 → 激活
                     NativeMethods.ShowWindow(bw.MatchedHwnd, NativeMethods.SW_RESTORE);
                     NativeMethods.SetForegroundWindow(bw.MatchedHwnd);
                 }
-                return; // 只操作第一个匹配窗口
+                return;
             }
         }
 
