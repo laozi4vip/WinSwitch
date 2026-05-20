@@ -32,14 +32,7 @@ public class BossKeyService
     /// </summary>
     public void Toggle()
     {
-        if (IsHidden)
-        {
-            Restore();
-        }
-        else
-        {
-            Hide();
-        }
+        if (IsHidden) { Restore(); } else { Hide(); }
     }
 
     /// <summary>
@@ -53,31 +46,23 @@ public class BossKeyService
         foreach (var rule in enabledRules)
         {
             var hWnd = _enumerator.FindTargetWindow(rule);
-            if (hWnd == IntPtr.Zero || !NativeMethods.IsWindow(hWnd))
-                continue;
+            if (hWnd == IntPtr.Zero || !NativeMethods.IsWindow(hWnd)) continue;
 
             // 缓存当前窗口扩展样式
-            rule.CachedExStyle = NativeMethods.GetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE);
+            rule.CachedExStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt32();
             rule.IsBossKeyHidden = true;
 
             switch (config.BossKeyMode)
             {
                 case BossKeyMode.HideWindowOnly:
-                    // 模式1: 仅隐藏窗口
                     NativeMethods.ShowWindow(hWnd, NativeMethods.SW_HIDE);
                     break;
-
                 case BossKeyMode.HideWindowAndTaskbar:
-                    // 模式2: 隐藏窗口 + 移除任务栏图标
                     NativeMethods.ShowWindow(hWnd, NativeMethods.SW_HIDE);
                     RemoveTaskbarIcon(hWnd);
                     break;
-
                 case BossKeyMode.HideWindowAndTaskbarAndAltTab:
-                    // 模式3: 隐藏窗口 + 移除任务栏图标 + 从 Alt+Tab 隐藏
-                    // 先修改扩展样式（窗口可见时修改才生效）
                     AddToolWindowStyle(hWnd);
-                    // 再隐藏窗口 + 移除任务栏
                     NativeMethods.ShowWindow(hWnd, NativeMethods.SW_HIDE);
                     RemoveTaskbarIcon(hWnd);
                     break;
@@ -108,28 +93,21 @@ public class BossKeyService
             switch (config.BossKeyMode)
             {
                 case BossKeyMode.HideWindowOnly:
-                    // 模式1 恢复: 显示窗口
                     NativeMethods.ShowWindow(hWnd, NativeMethods.SW_SHOW);
                     break;
-
                 case BossKeyMode.HideWindowAndTaskbar:
-                    // 模式2 恢复: 恢复任务栏图标 + 显示窗口
                     RestoreExStyle(hWnd, rule.CachedExStyle);
                     NativeMethods.ShowWindow(hWnd, NativeMethods.SW_SHOW);
                     break;
-
                 case BossKeyMode.HideWindowAndTaskbarAndAltTab:
-                    // 模式3 恢复: 移除 ToolWindow 样式 + 恢复原始样式 + 显示窗口
                     RemoveToolWindowStyle(hWnd);
                     RestoreExStyle(hWnd, rule.CachedExStyle);
                     NativeMethods.ShowWindow(hWnd, NativeMethods.SW_SHOW);
                     break;
             }
 
-            // 激活窗口
             NativeMethods.SetForegroundWindow(hWnd);
             NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
-
             rule.IsBossKeyHidden = false;
             rule.CachedExStyle = 0;
         }
@@ -138,42 +116,30 @@ public class BossKeyService
         BossKeyToggled?.Invoke(false);
     }
 
-    /// <summary>
-    /// 移除任务栏图标：清除 WS_EX_APPWINDOW 标志
-    /// </summary>
     private static void RemoveTaskbarIcon(IntPtr hWnd)
     {
-        var exStyle = NativeMethods.GetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE);
+        var exStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt32();
         exStyle &= ~NativeMethods.WS_EX_APPWINDOW;
-        NativeMethods.SetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE, exStyle);
+        NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, (IntPtr)exStyle);
     }
 
-    /// <summary>
-    /// 添加 WS_EX_TOOLWINDOW 样式（从 Alt+Tab 隐藏）
-    /// </summary>
     private static void AddToolWindowStyle(IntPtr hWnd)
     {
-        var exStyle = NativeMethods.GetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE);
+        var exStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt32();
         exStyle |= NativeMethods.WS_EX_TOOLWINDOW;
         exStyle &= ~NativeMethods.WS_EX_APPWINDOW;
-        NativeMethods.SetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE, exStyle);
+        NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, (IntPtr)exStyle);
     }
 
-    /// <summary>
-    /// 移除 WS_EX_TOOLWINDOW 样式
-    /// </summary>
     private static void RemoveToolWindowStyle(IntPtr hWnd)
     {
-        var exStyle = NativeMethods.GetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE);
+        var exStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt32();
         exStyle &= ~NativeMethods.WS_EX_TOOLWINDOW;
-        NativeMethods.SetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE, exStyle);
+        NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, (IntPtr)exStyle);
     }
 
-    /// <summary>
-    /// 恢复缓存的原始扩展样式
-    /// </summary>
     private static void RestoreExStyle(IntPtr hWnd, int cachedExStyle)
     {
-        NativeMethods.SetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE, cachedExStyle);
+        NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, (IntPtr)cachedExStyle);
     }
 }

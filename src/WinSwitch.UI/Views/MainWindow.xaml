@@ -4,8 +4,7 @@
         Title="WinSwitch — 窗口快捷切换助手"
         Width="720" Height="520"
         MinWidth="600" MinHeight="400"
-        WindowStartupLocation="CenterScreen"
-        Icon="pack://application:,,,/Assets/app.ico">
+        WindowStartupLocation="CenterScreen">
 
     <Grid Margin="12">
         <Grid.RowDefinitions>

@@ -17,39 +17,70 @@ public partial class App : Application
 
     public TrayIconManager? TrayIconMgr => _trayIconManager;
 
+    public App()
+    {
+        // 全局异常捕获 — 防止闪退
+        DispatcherUnhandledException += (sender, e) =>
+        {
+            MessageBox.Show($"发生未处理的异常：\n\n{e.Exception.Message}\n\n{e.Exception.StackTrace}",
+                "WinSwitch 错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            e.Handled = true;
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+        {
+            if (e.ExceptionObject is Exception ex)
+            {
+                MessageBox.Show($"发生致命异常：\n\n{ex.Message}\n\n{ex.StackTrace}",
+                    "WinSwitch 致命错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        };
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        // 初始化服务
-        WindowSwitcher = new WindowSwitcher(WindowEnumerator);
-        BossKeyService = new BossKeyService(WindowEnumerator, ConfigService);
+        try
+        {
+            // 初始化服务
+            WindowSwitcher = new WindowSwitcher(WindowEnumerator);
+            BossKeyService = new BossKeyService(WindowEnumerator, ConfigService);
 
-        // 加载配置
-        ConfigService.Load();
+            // 加载配置
+            ConfigService.Load();
 
-        // 设置日志级别
-        LogService.Instance.CurrentLevel =
-            ConfigService.Config.LogLevel.Equals("Debug", StringComparison.OrdinalIgnoreCase)
-                ? LogLevel.Debug
-                : LogLevel.Info;
+            // 设置日志级别
+            LogService.Instance.CurrentLevel = ConfigService.Config.LogLevel.Equals("Debug", StringComparison.OrdinalIgnoreCase)
+                ? LogLevel.Debug : LogLevel.Info;
 
-        // 初始化托盘图标
-        _trayIconManager = new TrayIconManager(ConfigService, HotkeyService, AutoStartService);
-        _trayIconManager.Initialize();
+            // 初始化托盘图标
+            _trayIconManager = new TrayIconManager(ConfigService, HotkeyService, AutoStartService);
+            _trayIconManager.Initialize();
 
-        // 注册快捷键（需要窗口句柄，在 MainWindow 创建后注册）
-        Current.MainWindow = new Views.MainWindow();
-        Current.MainWindow.Show();
+            // 创建主窗口
+            var mainWindow = new Views.MainWindow();
+            Current.MainWindow = mainWindow;
+            mainWindow.Show();
 
-        HotkeyService.SetWindowHandle(
-            new System.Windows.Interop.WindowInteropHelper(Current.MainWindow).Handle);
-        HotkeyService.RegisterAll(ConfigService.Config);
+            // 注册快捷键（需要窗口句柄）
+            HotkeyService.SetWindowHandle(
+                new System.Windows.Interop.WindowInteropHelper(mainWindow).Handle);
+            HotkeyService.RegisterAll(ConfigService.Config);
 
-        // 订阅事件
-        HotkeyService.HotkeyPressed += OnHotkeyPressed;
-        HotkeyService.BossKeyPressed += OnBossKeyPressed;
-        WindowSwitcher.SwitchCompleted += OnSwitchCompleted;
+            // 订阅事件
+            HotkeyService.HotkeyPressed += OnHotkeyPressed;
+            HotkeyService.BossKeyPressed += OnBossKeyPressed;
+            WindowSwitcher.SwitchCompleted += OnSwitchCompleted;
+
+            LogService.Instance.Info("WinSwitch 启动成功");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"启动失败：\n\n{ex.Message}\n\n{ex.StackTrace}",
+                "WinSwitch 启动错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
+        }
     }
 
     private void OnHotkeyPressed(string ruleId)
@@ -70,10 +101,8 @@ public partial class App : Application
     {
         if (!result.Success)
         {
-            // 规则匹配失败 → 托盘气泡通知（D5决策）
             TrayIconManager.ShowBalloonTip("WinSwitch", result.Message);
         }
-
         LogService.Instance.Info($"切换结果: {result.Message}");
     }
 

@@ -43,7 +43,7 @@ public class WindowEnumerator
                 processName = "Unknown";
             }
 
-            var exStyle = NativeMethods.GetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE);
+            var exStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt32();
 
             windows.Add(new WindowInfo
             {
