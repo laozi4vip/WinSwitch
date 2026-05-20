@@ -1,7 +1,7 @@
 using System.Windows;
+using WinSwitch.Core.Interop;
 using WinSwitch.Core.Models;
 using WinSwitch.Core.Services;
-using WinSwitch.UI.ViewModels;
 
 namespace WinSwitch.UI.Views;
 
@@ -144,8 +144,10 @@ public partial class MainWindow : Window
         base.OnSourceInitialized(e);
 
         // 添加 WM_HOTKEY 消息钩子
-        var helper = new System.Windows.Interop.HwndSource(
-            new System.Windows.Interop.WindowInteropHelper(this).Handle);
+        var helper = new System.Windows.Interop.HwndSource(new System.Windows.Interop.HwndSourceParameters("WinSwitch")
+        {
+            ParentWindow = new System.Windows.Interop.WindowInteropHelper(this).Handle
+        });
         helper.AddHook(WndProc);
     }
 

@@ -17,6 +17,10 @@ public class TrayIconManager : IDisposable
     private System.Windows.Forms.NotifyIcon? _notifyIcon;
     private bool _isPaused;
 
+    // 保存菜单项引用以便更新状态
+    private System.Windows.Forms.ToolStripMenuItem? _pauseItem;
+    private System.Windows.Forms.ToolStripMenuItem? _autoStartItem;
+
     public TrayIconManager(ConfigService configService, HotkeyService hotkeyService, AutoStartService autoStartService)
     {
         _configService = configService;
@@ -49,30 +53,37 @@ public class TrayIconManager : IDisposable
 
         contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
-        var pauseItem = contextMenu.Items.Add("暂停快捷键", null, (_, _) => TogglePause());
+        _pauseItem = new System.Windows.Forms.ToolStripMenuItem("暂停快捷键");
+        _pauseItem.Click += (_, _) => TogglePause();
+        contextMenu.Items.Add(_pauseItem);
 
         contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
-        var autoStartItem = contextMenu.Items.Add("开机自启动", null, (_, _) => ToggleAutoStart());
-        autoStartItem.Checked = _autoStartService.IsEnabled;
+        _autoStartItem = new System.Windows.Forms.ToolStripMenuItem("开机自启动");
+        _autoStartItem.Click += (_, _) => ToggleAutoStart();
+        _autoStartItem.Checked = _autoStartService.IsEnabled;
+        contextMenu.Items.Add(_autoStartItem);
 
         contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
         // 日志级别子菜单
         var logMenu = new System.Windows.Forms.ToolStripMenuItem("日志级别");
-        var debugItem = logMenu.DropDownItems.Add("Debug", null, (_, _) =>
+        var debugItem = new System.Windows.Forms.ToolStripMenuItem("Debug");
+        debugItem.Click += (_, _) =>
         {
             LogService.Instance.CurrentLevel = LogLevel.Debug;
             _configService.Config.LogLevel = "Debug";
             _configService.Save();
-        });
-        var infoItem = logMenu.DropDownItems.Add("Info", null, (_, _) =>
+        };
+        var infoItem = new System.Windows.Forms.ToolStripMenuItem("Info");
+        infoItem.Click += (_, _) =>
         {
             LogService.Instance.CurrentLevel = LogLevel.Info;
             _configService.Config.LogLevel = "Info";
             _configService.Save();
-        });
+        };
         infoItem.Checked = true;
+        logMenu.DropDownItems.AddRange(new[] { debugItem, infoItem });
         contextMenu.Items.Add(logMenu);
 
         contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
@@ -109,10 +120,9 @@ public class TrayIconManager : IDisposable
             ShowBalloonTip("WinSwitch", "快捷键已恢复");
         }
 
-        // 更新菜单文本
-        if (_notifyIcon?.ContextMenuStrip?.Items[2] is System.Windows.Forms.ToolStripMenuItem pauseItem)
+        if (_pauseItem != null)
         {
-            pauseItem.Text = _isPaused ? "恢复快捷键" : "暂停快捷键";
+            _pauseItem.Text = _isPaused ? "恢复快捷键" : "暂停快捷键";
         }
     }
 
@@ -127,10 +137,9 @@ public class TrayIconManager : IDisposable
             _autoStartService.Enable();
         }
 
-        // 更新菜单勾选状态
-        if (_notifyIcon?.ContextMenuStrip?.Items[4] is System.Windows.Forms.ToolStripMenuItem autoStartItem)
+        if (_autoStartItem != null)
         {
-            autoStartItem.Checked = _autoStartService.IsEnabled;
+            _autoStartItem.Checked = _autoStartService.IsEnabled;
         }
     }
 
@@ -143,8 +152,10 @@ public class TrayIconManager : IDisposable
         {
             window.Dispatcher.Invoke(() =>
             {
-                var icon = (Application.Current as App)?.TrayIconManager?._notifyIcon;
-                icon?.ShowBalloonTip(timeout, title, text, System.Windows.Forms.ToolTipIcon.Info);
+                if (Application.Current is App app && app._trayIconManager?._notifyIcon is { } icon)
+                {
+                    icon.ShowBalloonTip(timeout, title, text, System.Windows.Forms.ToolTipIcon.Info);
+                }
             });
         }
     }

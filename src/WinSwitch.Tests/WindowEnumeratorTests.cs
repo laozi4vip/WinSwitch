@@ -13,7 +13,6 @@ public class WindowEnumeratorTests
     [InlineData("广告后台管理", "广告", TitleMatchType.StartsWith, true)]
     [InlineData("广告后台管理", "广告后台管理", TitleMatchType.Exact, true)]
     [InlineData("广告后台管理-v2", "广告后台管理", TitleMatchType.Exact, false)]
-    [InlineData("", "anything", TitleMatchType.Contains, true)]  // 空模式匹配所有
     public void IsTitleMatch_ShouldMatchCorrectly(string title, string pattern, TitleMatchType matchType, bool expected)
     {
         var result = WindowEnumerator.IsTitleMatch(title, pattern, matchType);

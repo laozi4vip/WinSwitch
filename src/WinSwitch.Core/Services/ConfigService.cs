@@ -1,4 +1,3 @@
-using System.Reflection;
 using Newtonsoft.Json;
 using WinSwitch.Core.Models;
 

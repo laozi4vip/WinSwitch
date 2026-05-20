@@ -1,5 +1,6 @@
 using System.Windows;
 using WinSwitch.Core.Services;
+using WinSwitch.UI.Views;
 
 namespace WinSwitch.UI;
 
@@ -12,7 +13,8 @@ public partial class App : Application
     public static HotkeyService HotkeyService { get; private set; } = new();
     public static AutoStartService AutoStartService { get; private set; } = new();
 
-    private TrayIconManager? _trayIconManager;
+    internal TrayIconManager? _trayIconManager;
+    internal TrayIconManager? TrayIconManagerField => _trayIconManager;
 
     protected override void OnStartup(StartupEventArgs e)
     {
