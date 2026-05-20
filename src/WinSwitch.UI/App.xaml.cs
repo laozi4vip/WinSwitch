@@ -14,7 +14,8 @@ public partial class App : Application
     public static AutoStartService AutoStartService { get; private set; } = new();
 
     internal TrayIconManager? _trayIconManager;
-    internal TrayIconManager? TrayIconManagerField => _trayIconManager;
+
+    public TrayIconManager? TrayIconMgr => _trayIconManager;
 
     protected override void OnStartup(StartupEventArgs e)
     {

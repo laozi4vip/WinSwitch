@@ -148,15 +148,9 @@ public class TrayIconManager : IDisposable
     /// </summary>
     public static void ShowBalloonTip(string title, string text, int timeout = 3000)
     {
-        if (Application.Current.MainWindow is { } window)
+        if (Application.Current is App app && app._trayIconManager?._notifyIcon is { } icon)
         {
-            window.Dispatcher.Invoke(() =>
-            {
-                if (Application.Current is App app && app._trayIconManager?._notifyIcon is { } icon)
-                {
-                    icon.ShowBalloonTip(timeout, title, text, System.Windows.Forms.ToolTipIcon.Info);
-                }
-            });
+            icon.ShowBalloonTip(timeout, title, text, System.Windows.Forms.ToolTipIcon.Info);
         }
     }
 

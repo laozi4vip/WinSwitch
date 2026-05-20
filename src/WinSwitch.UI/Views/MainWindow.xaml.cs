@@ -17,6 +17,14 @@ public partial class MainWindow : Window
         App.BossKeyService.BossKeyToggled += OnBossKeyToggled;
     }
 
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        // 关闭窗口时隐藏到托盘而不是退出
+        e.Cancel = true;
+        this.Hide();
+        TrayIconManager.ShowBalloonTip("WinSwitch", "程序已最小化到托盘");
+    }
+
     private void LoadRules()
     {
         var rules = App.ConfigService.Config.Rules;
@@ -143,12 +151,10 @@ public partial class MainWindow : Window
     {
         base.OnSourceInitialized(e);
 
-        // 添加 WM_HOTKEY 消息钩子
-        var helper = new System.Windows.Interop.HwndSource(new System.Windows.Interop.HwndSourceParameters("WinSwitch")
-        {
-            ParentWindow = new System.Windows.Interop.WindowInteropHelper(this).Handle
-        });
-        helper.AddHook(WndProc);
+        // 获取当前窗口的 HwndSource 并添加 WM_HOTKEY 消息钩子
+        var helper = System.Windows.Interop.HwndSource.FromHwnd(
+            new System.Windows.Interop.WindowInteropHelper(this).Handle);
+        helper?.AddHook(WndProc);
     }
 
     private IntPtr WndProc(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
