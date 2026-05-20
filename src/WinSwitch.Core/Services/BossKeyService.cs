@@ -52,14 +52,13 @@ public class BossKeyService
 
         foreach (var rule in enabledRules)
         {
-            // 枚举该进程的所有窗口（浏览器有多个子窗口）
-            var allWindows = _enumerator.FindAllWindowsByProcess(rule.ProcessName);
+            // 查找该进程所有匹配的窗口（支持标题关键词过滤+浏览器多标签页）
+            var matchingHandles = _enumerator.FindAllMatchingWindows(rule);
 
-            foreach (var window in allWindows)
+            foreach (var hWnd in matchingHandles)
             {
-                var hWnd = window.Handle;
+                
                 if (hWnd == IntPtr.Zero || !NativeMethods.IsWindow(hWnd)) continue;
-                if (!window.IsVisible) continue; // 跳过已隐藏的窗口
 
                 // 缓存当前窗口扩展样式
                 var cachedExStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt32();
@@ -85,8 +84,8 @@ public class BossKeyService
             }
 
             rule.IsBossKeyHidden = true;
-            rule.CachedExStyle = allWindows.Count > 0
-                ? NativeMethods.GetWindowLongPtr(allWindows[0].Handle, NativeMethods.GWL_EXSTYLE).ToInt32()
+            rule.CachedExStyle = matchingHandles.Count > 0
+                ? NativeMethods.GetWindowLongPtr(matchingHandles[0], NativeMethods.GWL_EXSTYLE).ToInt32()
                 : 0;
         }
 

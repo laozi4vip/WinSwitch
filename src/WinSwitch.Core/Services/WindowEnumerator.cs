@@ -31,7 +31,6 @@ public class WindowEnumerator
             var title = titleBuilder.ToString();
 
             NativeMethods.GetWindowThreadProcessId(hWnd, out var processId);
-
             string processName;
             try
             {
@@ -55,10 +54,8 @@ public class WindowEnumerator
                 IsTopLevel = true,
                 ExStyle = exStyle
             });
-
             return true;
         }, IntPtr.Zero);
-
         return windows;
     }
 
@@ -98,6 +95,28 @@ public class WindowEnumerator
     }
 
     /// <summary>
+    /// 按进程名+标题规则查找所有匹配窗口（用于老板键/浏览器多标签页）
+    /// </summary>
+    public List<IntPtr> FindAllMatchingWindows(WindowRule rule)
+    {
+        var result = new List<IntPtr>();
+        var windows = FindWindowsByProcess(rule.ProcessName);
+
+        foreach (var window in windows)
+        {
+            bool titleMatch = rule.MatchMode == MatchMode.Fixed
+                || string.IsNullOrEmpty(rule.TitlePattern)
+                || IsTitleMatch(window.Title, rule.TitlePattern, rule.TitleMatchType);
+
+            if (titleMatch)
+            {
+                result.Add(window.Handle);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Fixed 模式：先检查缓存句柄，无效则按进程名重定位
     /// </summary>
     private IntPtr FindFixedWindow(WindowRule rule)
@@ -115,7 +134,6 @@ public class WindowEnumerator
             rule.CachedHandle = windows[0].Handle;
             return windows[0].Handle;
         }
-
         return IntPtr.Zero;
     }
 
@@ -125,7 +143,6 @@ public class WindowEnumerator
     private IntPtr FindRuleWindow(WindowRule rule)
     {
         var windows = FindWindowsByProcess(rule.ProcessName);
-
         foreach (var window in windows)
         {
             if (IsTitleMatch(window.Title, rule.TitlePattern, rule.TitleMatchType))
@@ -133,26 +150,35 @@ public class WindowEnumerator
                 return window.Handle;
             }
         }
-
         return IntPtr.Zero;
     }
 
     /// <summary>
     /// 标题匹配
+    /// 包含模式支持多个关键词，用分号分隔（如：Chrome;Edge;Firefox）
     /// </summary>
     public static bool IsTitleMatch(string title, string pattern, TitleMatchType matchType)
     {
-        if (string.IsNullOrEmpty(pattern))
-            return true;
+        if (string.IsNullOrEmpty(pattern)) return true;
 
         return matchType switch
         {
-            TitleMatchType.Contains => title.Contains(pattern, StringComparison.OrdinalIgnoreCase),
+            TitleMatchType.Contains => MatchContainsAny(title, pattern),
             TitleMatchType.StartsWith => title.StartsWith(pattern, StringComparison.OrdinalIgnoreCase),
             TitleMatchType.Exact => string.Equals(title, pattern, StringComparison.OrdinalIgnoreCase),
             TitleMatchType.Regex => Regex.IsMatch(title, pattern, RegexOptions.IgnoreCase),
             _ => false
         };
+    }
+
+    /// <summary>
+    /// 包含匹配：支持分号分隔的多个关键词，任一匹配即返回 true
+    /// 示例："Chrome;Edge;Firefox" → 标题包含其中任一即匹配
+    /// </summary>
+    private static bool MatchContainsAny(string title, string pattern)
+    {
+        var keywords = pattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return keywords.Any(kw => title.Contains(kw, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
