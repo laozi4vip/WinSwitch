@@ -63,6 +63,16 @@ public class WindowEnumerator
     }
 
     /// <summary>
+    /// 按进程名查找所有可见窗口（浏览器等有多窗口进程需要）
+    /// </summary>
+    public List<WindowInfo> FindAllWindowsByProcess(string processName)
+    {
+        return EnumerateAllWindows()
+            .Where(w => string.Equals(w.ProcessName, processName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    /// <summary>
     /// 按规则查找目标窗口
     /// </summary>
     public IntPtr FindTargetWindow(WindowRule rule)

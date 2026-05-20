@@ -31,9 +31,9 @@
         <!-- 快捷键 -->
         <TextBlock Grid.Row="1" Grid.Column="0" Text="快捷键" VerticalAlignment="Center"/>
         <TextBox Grid.Row="1" Grid.Column="1" Name="TxtHotkey" Margin="4"
-                 Text="Ctrl+Alt+" GotFocus="TxtHotkey_GotFocus"/>
+                 IsReadOnly="True" Focusable="True"/>
         <TextBlock Grid.Row="1" Grid.Column="1" Margin="4,28,4,0"
-                   Text="格式: Ctrl+Alt+X / Ctrl+Shift+F1" Opacity="0.5" FontSize="11"/>
+                   Text="点击输入框，按下组合键设置（如 Ctrl+A）" Opacity="0.5" FontSize="11"/>
 
         <!-- 匹配模式 -->
         <TextBlock Grid.Row="2" Grid.Column="0" Text="匹配模式" VerticalAlignment="Center"/>

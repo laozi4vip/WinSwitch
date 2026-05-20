@@ -1,12 +1,59 @@
+using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Windows;
+using System.Windows.Data;
 using WinSwitch.Core.Interop;
 using WinSwitch.Core.Models;
 using WinSwitch.Core.Services;
 
 namespace WinSwitch.UI.Views;
 
+/// <summary>
+/// 匹配模式转中文
+/// </summary>
+public class MatchModeConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is MatchMode m ? m switch { MatchMode.Fixed => "固定窗口", MatchMode.Rule => "规则匹配", _ => m.ToString() } : value?.ToString() ?? "";
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
+/// 标题匹配方式转中文
+/// </summary>
+public class TitleMatchTypeConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is TitleMatchType t ? t switch
+        {
+            TitleMatchType.Contains => "包含",
+            TitleMatchType.StartsWith => "开头匹配",
+            TitleMatchType.Exact => "精确匹配",
+            TitleMatchType.Regex => "正则表达式",
+            _ => t.ToString()
+        } : value?.ToString() ?? "";
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
+/// 布尔转中文
+/// </summary>
+public class BoolToChineseConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is true ? "✓" : "✗";
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
 public partial class MainWindow : Window
 {
+    private ObservableCollection<WindowRule> _rulesCollection = new();
     public MainWindow()
     {
         InitializeComponent();
@@ -27,8 +74,8 @@ public partial class MainWindow : Window
 
     private void LoadRules()
     {
-        var rules = App.ConfigService.Config.Rules;
-        RulesDataGrid.ItemsSource = rules;
+        _rulesCollection = new ObservableCollection<WindowRule>(App.ConfigService.Config.Rules);
+        RulesDataGrid.ItemsSource = _rulesCollection;
     }
 
     private void UpdateBossKeyDisplay()

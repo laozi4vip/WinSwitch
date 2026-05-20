@@ -33,9 +33,22 @@ public class TrayIconManager : IDisposable
         _notifyIcon = new System.Windows.Forms.NotifyIcon
         {
             Text = "WinSwitch — 窗口快捷切换助手",
-            Icon = System.Drawing.SystemIcons.Application,
             Visible = true
         };
+
+        // 加载图标
+        try
+        {
+            var iconStream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/sun.ico"));
+            if (iconStream != null)
+                _notifyIcon.Icon = new System.Drawing.Icon(iconStream.Stream);
+            else
+                _notifyIcon.Icon = System.Drawing.SystemIcons.Application;
+        }
+        catch
+        {
+            _notifyIcon.Icon = System.Drawing.SystemIcons.Application;
+        }
 
         // 单击打开主窗口（D2决策）
         _notifyIcon.MouseClick += (s, e) =>

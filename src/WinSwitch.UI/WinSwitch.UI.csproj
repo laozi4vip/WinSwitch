@@ -12,6 +12,7 @@
     <Description>窗口快捷切换助手</Description>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <ApplicationIcon>sun.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- 发布时才设置 RuntimeIdentifier 和自包含选项 -->
@@ -23,6 +24,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\WinSwitch.Core\WinSwitch.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="sun.ico" />
   </ItemGroup>
 
   <ItemGroup>

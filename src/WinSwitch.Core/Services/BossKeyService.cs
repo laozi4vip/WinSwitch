@@ -11,6 +11,11 @@ public class BossKeyService
     private readonly WindowEnumerator _enumerator;
     private readonly ConfigService _configService;
 
+    /// <summary>
+    /// 记录被老板键隐藏的窗口句柄列表，用于恢复
+    /// </summary>
+    private readonly List<IntPtr> _hiddenWindowHandles = new();
+
     public BossKeyService(WindowEnumerator enumerator, ConfigService configService)
     {
         _enumerator = enumerator;
@@ -37,36 +42,52 @@ public class BossKeyService
 
     /// <summary>
     /// 隐藏所有 bossKeyEnabled=true 的窗口
+    /// 修复：枚举进程的所有窗口（如浏览器的多个标签页窗口）
     /// </summary>
     private void Hide()
     {
         var config = _configService.Config;
         var enabledRules = config.Rules.Where(r => r.BossKeyEnabled).ToList();
+        _hiddenWindowHandles.Clear();
 
         foreach (var rule in enabledRules)
         {
-            var hWnd = _enumerator.FindTargetWindow(rule);
-            if (hWnd == IntPtr.Zero || !NativeMethods.IsWindow(hWnd)) continue;
+            // 枚举该进程的所有窗口（浏览器有多个子窗口）
+            var allWindows = _enumerator.FindAllWindowsByProcess(rule.ProcessName);
 
-            // 缓存当前窗口扩展样式
-            rule.CachedExStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt32();
-            rule.IsBossKeyHidden = true;
-
-            switch (config.BossKeyMode)
+            foreach (var window in allWindows)
             {
-                case BossKeyMode.HideWindowOnly:
-                    NativeMethods.ShowWindow(hWnd, NativeMethods.SW_HIDE);
-                    break;
-                case BossKeyMode.HideWindowAndTaskbar:
-                    NativeMethods.ShowWindow(hWnd, NativeMethods.SW_HIDE);
-                    RemoveTaskbarIcon(hWnd);
-                    break;
-                case BossKeyMode.HideWindowAndTaskbarAndAltTab:
-                    AddToolWindowStyle(hWnd);
-                    NativeMethods.ShowWindow(hWnd, NativeMethods.SW_HIDE);
-                    RemoveTaskbarIcon(hWnd);
-                    break;
+                var hWnd = window.Handle;
+                if (hWnd == IntPtr.Zero || !NativeMethods.IsWindow(hWnd)) continue;
+                if (!window.IsVisible) continue; // 跳过已隐藏的窗口
+
+                // 缓存当前窗口扩展样式
+                var cachedExStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt32();
+
+                switch (config.BossKeyMode)
+                {
+                    case BossKeyMode.HideWindowOnly:
+                        NativeMethods.ShowWindow(hWnd, NativeMethods.SW_HIDE);
+                        break;
+                    case BossKeyMode.HideWindowAndTaskbar:
+                        NativeMethods.ShowWindow(hWnd, NativeMethods.SW_HIDE);
+                        RemoveTaskbarIcon(hWnd);
+                        break;
+                    case BossKeyMode.HideWindowAndTaskbarAndAltTab:
+                        AddToolWindowStyle(hWnd);
+                        NativeMethods.ShowWindow(hWnd, NativeMethods.SW_HIDE);
+                        RemoveTaskbarIcon(hWnd);
+                        break;
+                }
+
+                // 记录隐藏的窗口信息，用于恢复
+                _hiddenWindowHandles.Add(hWnd);
             }
+
+            rule.IsBossKeyHidden = true;
+            rule.CachedExStyle = allWindows.Count > 0
+                ? NativeMethods.GetWindowLongPtr(allWindows[0].Handle, NativeMethods.GWL_EXSTYLE).ToInt32()
+                : 0;
         }
 
         IsHidden = true;
@@ -79,16 +100,11 @@ public class BossKeyService
     private void Restore()
     {
         var config = _configService.Config;
-        var hiddenRules = config.Rules.Where(r => r.IsBossKeyHidden).ToList();
 
-        foreach (var rule in hiddenRules)
+        // 恢复所有隐藏的窗口句柄
+        foreach (var hWnd in _hiddenWindowHandles)
         {
-            var hWnd = _enumerator.FindTargetWindow(rule);
-            if (hWnd == IntPtr.Zero || !NativeMethods.IsWindow(hWnd))
-            {
-                rule.IsBossKeyHidden = false;
-                continue;
-            }
+            if (hWnd == IntPtr.Zero || !NativeMethods.IsWindow(hWnd)) continue;
 
             switch (config.BossKeyMode)
             {
@@ -96,18 +112,25 @@ public class BossKeyService
                     NativeMethods.ShowWindow(hWnd, NativeMethods.SW_SHOW);
                     break;
                 case BossKeyMode.HideWindowAndTaskbar:
-                    RestoreExStyle(hWnd, rule.CachedExStyle);
+                    RestoreAppWindowStyle(hWnd);
                     NativeMethods.ShowWindow(hWnd, NativeMethods.SW_SHOW);
                     break;
                 case BossKeyMode.HideWindowAndTaskbarAndAltTab:
                     RemoveToolWindowStyle(hWnd);
-                    RestoreExStyle(hWnd, rule.CachedExStyle);
+                    RestoreAppWindowStyle(hWnd);
                     NativeMethods.ShowWindow(hWnd, NativeMethods.SW_SHOW);
                     break;
             }
 
             NativeMethods.SetForegroundWindow(hWnd);
             NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
+        }
+
+        _hiddenWindowHandles.Clear();
+
+        // 清除规则的隐藏标记
+        foreach (var rule in config.Rules.Where(r => r.IsBossKeyHidden))
+        {
             rule.IsBossKeyHidden = false;
             rule.CachedExStyle = 0;
         }
@@ -120,6 +143,14 @@ public class BossKeyService
     {
         var exStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt32();
         exStyle &= ~NativeMethods.WS_EX_APPWINDOW;
+        NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, (IntPtr)exStyle);
+    }
+
+    private static void RestoreAppWindowStyle(IntPtr hWnd)
+    {
+        var exStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt32();
+        exStyle |= NativeMethods.WS_EX_APPWINDOW;
+        exStyle &= ~NativeMethods.WS_EX_TOOLWINDOW;
         NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, (IntPtr)exStyle);
     }
 
@@ -136,10 +167,5 @@ public class BossKeyService
         var exStyle = NativeMethods.GetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE).ToInt32();
         exStyle &= ~NativeMethods.WS_EX_TOOLWINDOW;
         NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, (IntPtr)exStyle);
-    }
-
-    private static void RestoreExStyle(IntPtr hWnd, int cachedExStyle)
-    {
-        NativeMethods.SetWindowLongPtr(hWnd, NativeMethods.GWL_EXSTYLE, (IntPtr)cachedExStyle);
     }
 }
