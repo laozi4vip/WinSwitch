@@ -20,6 +20,8 @@ public class TrayIconManager : IDisposable
     // 保存菜单项引用以便更新状态
     private System.Windows.Forms.ToolStripMenuItem? _pauseItem;
     private System.Windows.Forms.ToolStripMenuItem? _autoStartItem;
+    private System.Windows.Forms.ToolStripMenuItem? _balloonTipItem;
+    private System.Windows.Forms.ToolStripMenuItem? _silentLaunchItem;
 
     public TrayIconManager(ConfigService configService, HotkeyService hotkeyService, AutoStartService autoStartService)
     {
@@ -76,6 +78,16 @@ public class TrayIconManager : IDisposable
         _autoStartItem.Click += (_, _) => ToggleAutoStart();
         _autoStartItem.Checked = _autoStartService.IsEnabled;
         contextMenu.Items.Add(_autoStartItem);
+
+        _balloonTipItem = new System.Windows.Forms.ToolStripMenuItem("气泡通知");
+        _balloonTipItem.Click += (_, _) => ToggleBalloonTip();
+        _balloonTipItem.Checked = _configService.Config.BalloonTipEnabled;
+        contextMenu.Items.Add(_balloonTipItem);
+
+        _silentLaunchItem = new System.Windows.Forms.ToolStripMenuItem("静默启动");
+        _silentLaunchItem.Click += (_, _) => ToggleSilentLaunch();
+        _silentLaunchItem.Checked = _configService.Config.SilentLaunch;
+        contextMenu.Items.Add(_silentLaunchItem);
 
         contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
@@ -139,6 +151,26 @@ public class TrayIconManager : IDisposable
         }
     }
 
+    private void ToggleSilentLaunch()
+    {
+        _configService.Config.SilentLaunch = !_configService.Config.SilentLaunch;
+        _configService.Save();
+        if (_silentLaunchItem != null)
+        {
+            _silentLaunchItem.Checked = _configService.Config.SilentLaunch;
+        }
+    }
+
+    private void ToggleBalloonTip()
+    {
+        _configService.Config.BalloonTipEnabled = !_configService.Config.BalloonTipEnabled;
+        _configService.Save();
+        if (_balloonTipItem != null)
+        {
+            _balloonTipItem.Checked = _configService.Config.BalloonTipEnabled;
+        }
+    }
+
     private void ToggleAutoStart()
     {
         if (_autoStartService.IsEnabled)
@@ -161,9 +193,14 @@ public class TrayIconManager : IDisposable
     /// </summary>
     public static void ShowBalloonTip(string title, string text, int timeout = 3000)
     {
-        if (Application.Current is App app && app._trayIconManager?._notifyIcon is { } icon)
+        // 检查气泡通知开关
+        if (Application.Current is App app)
         {
-            icon.ShowBalloonTip(timeout, title, text, System.Windows.Forms.ToolTipIcon.Info);
+            if (!App.ConfigService.Config.BalloonTipEnabled) return;
+            if (app._trayIconManager?._notifyIcon is { } icon)
+            {
+                icon.ShowBalloonTip(timeout, title, text, System.Windows.Forms.ToolTipIcon.Info);
+            }
         }
     }
 

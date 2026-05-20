@@ -22,6 +22,12 @@ public class AppConfig
     [JsonProperty("autoStart")]
     public bool AutoStart { get; set; } = false;
 
+    [JsonProperty("balloonTipEnabled")]
+    public bool BalloonTipEnabled { get; set; } = true;
+
+    [JsonProperty("silentLaunch")]
+    public bool SilentLaunch { get; set; } = false;
+
     [JsonProperty("logLevel")]
     public string LogLevel { get; set; } = "Info";
 }
