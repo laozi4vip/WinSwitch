@@ -1,7 +1,8 @@
 # WinSwitch 浏览器扩展安装脚本
 # 需要管理员权限运行
 param(
-    [string]$ExtensionId,
+    # 扩展ID（默认为 WinSwitch Browser Bridge 的固定ID）
+    [string]$ExtensionId = "onmdjfmanjjfgiikhohjhknmphchfcjk",
     [switch]$Uninstall
 )
 
@@ -29,45 +30,20 @@ if ($Uninstall) {
 
 Write-Host "Installing WinSwitch Native Messaging Host..." -ForegroundColor Cyan
 
-# 如果没有提供扩展ID，提示用户
-if (-not $ExtensionId) {
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Yellow
-    Write-Host "  需要提供浏览器扩展ID" -ForegroundColor Yellow
-    Write-Host "========================================" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "获取扩展ID的步骤：" -ForegroundColor White
-    Write-Host "  1. 在 Chrome/Edge 中打开 chrome://extensions" -ForegroundColor White
-    Write-Host "  2. 开启'开发者模式'" -ForegroundColor White
-    Write-Host "  3. 点击'加载已解压的扩展'，选择 WinSwitch.BrowserExtension 目录" -ForegroundColor White
-    Write-Host "  4. 加载后，扩展卡片上会显示一串字母数字ID（如：abcdefghijklmnopqrstuvwxyz）" -ForegroundColor White
-    Write-Host "  5. 复制该ID" -ForegroundColor White
-    Write-Host ""
-    Write-Host "然后重新运行此脚本：" -ForegroundColor White
-    Write-Host "  .\install.ps1 -ExtensionId <你的扩展ID>" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "示例：" -ForegroundColor White
-    Write-Host "  .\install.ps1 -ExtensionId abcdefghijklmnopqrstuvwxyz" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "注意：每次重新加载扩展后ID可能变化，需要重新运行此脚本" -ForegroundColor Red
-    return
-}
-
 # 构建 allowed_origins
 $chromeOrigin = "chrome-extension://$ExtensionId/"
-$edgeOrigin = "chrome-extension://$ExtensionId/"  # Edge 也用 chromium 格式
 
-# 更新 manifest
+# 更新 manifest：设置 path 为绝对路径，设置 allowed_origins
 $manifest = @{
     name = $HostName
-    description = "WinSwitch Browser Bridge — Native Messaging Host"
+    description = "WinSwitch Browser Bridge - Native Messaging Host"
     path = $ExePath
     type = "stdio"
     allowed_origins = @($chromeOrigin)
 } | ConvertTo-Json -Depth 10
 
 Set-Content -Path $ManifestPath -Value $manifest -Encoding UTF8
-Write-Host "Updated manifest with Extension ID: $ExtensionId" -ForegroundColor Green
+Write-Host "Updated manifest: Extension ID = $ExtensionId" -ForegroundColor Green
 
 # Chrome 注册表
 $chromeKey = "HKLM:\SOFTWARE\Google\Chrome\NativeMessagingHosts\$HostName"
@@ -88,5 +64,8 @@ Write-Host "Registered for Edge" -ForegroundColor Green
 Write-Host ""
 Write-Host "Installation complete!" -ForegroundColor Green
 Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "  1. Restart the browser (close all browser windows and reopen)"
-Write-Host "  2. The extension should now be able to connect to the native host"
+Write-Host "  1. Load the browser extension in chrome://extensions (Developer mode -> Load unpacked -> select WinSwitch.BrowserExtension folder)"
+Write-Host "  2. Restart the browser (close all browser windows and reopen)"
+Write-Host ""
+Write-Host "Note: If you changed the extension ID, re-run with:" -ForegroundColor Cyan
+Write-Host "  .\install.ps1 -ExtensionId <your-extension-id>" -ForegroundColor Cyan

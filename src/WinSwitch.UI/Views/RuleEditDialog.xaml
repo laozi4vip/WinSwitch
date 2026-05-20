@@ -44,7 +44,7 @@
 
         <!-- 标题规则 -->
         <TextBlock Grid.Row="5" Grid.Column="0" Text="标题规则" VerticalAlignment="Center" Name="LblTitlePattern"/>
-        <TextBlock Grid.Row="5" Grid.Column="1" Margin="4,0,4,0" Text="包含模式支持分号分隔多关键词，如：Chrome;Edge" Opacity="0.5" FontSize="11" Name="LblTitleHint"/>
+        <TextBlock Grid.Row="5" Grid.Column="1" Margin="4,0,4,0" Text="包含模式支持分号分隔多关键词，如：Chrome;Edge" Opacity="0.5" FontSize="11" Name="LblTitleHint" TextWrapping="Wrap"/>
         <TextBox Grid.Row="6" Grid.Column="1" Name="TxtTitlePattern" Margin="4" MinHeight="28" AcceptsReturn="False"/>
 
         <!-- 标题匹配方式 -->

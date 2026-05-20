@@ -4,6 +4,6 @@
   "path": "WinSwitch.NativeHost.exe",
   "type": "stdio",
   "allowed_origins": [
-    "chrome-extension://*/"
+    "chrome-extension://onmdjfmanjjfgiikhohjhknmphchfcjk/"
   ]
 }

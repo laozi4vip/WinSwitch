@@ -269,6 +269,7 @@ public partial class RuleEditDialog : Window
     }
 
     // V2: URL 字段根据浏览器匹配模式显示/隐藏
+    // 同时更新标题规则提示文字
     private void UpdateBrowserFieldsVisibility()
     {
         var isUrlMode = Rule.BrowserMatchMode == BrowserMatchMode.AnyTabUrl;
@@ -277,6 +278,14 @@ public partial class RuleEditDialog : Window
         LblUrlHint.Visibility = isUrlMode ? Visibility.Visible : Visibility.Collapsed;
         LblUrlMatchType.Visibility = isUrlMode ? Visibility.Visible : Visibility.Collapsed;
         CmbUrlMatchType.Visibility = isUrlMode ? Visibility.Visible : Visibility.Collapsed;
+
+        // 根据浏览器匹配模式更新标题规则提示
+        LblTitleHint.Text = Rule.BrowserMatchMode switch
+        {
+            BrowserMatchMode.AnyTabTitle => "匹配窗口中任意标签页标题关键词，如：客服工作台;订单管理",
+            BrowserMatchMode.AnyTabUrl => "窗口标题规则（URL匹配为主，标题规则可选）",
+            _ => "包含模式支持分号分隔多关键词，如：Chrome;Edge"
+        };
     }
 
     private void BtnOk_Click(object sender, RoutedEventArgs e)
