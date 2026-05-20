@@ -1,4 +1,6 @@
 using System.Windows;
+using WinSwitch.Core.Interop;
+using WinSwitch.Core.Models;
 using WinSwitch.Core.Services;
 using WinSwitch.UI.Views;
 
@@ -13,8 +15,12 @@ public partial class App : Application
     public static HotkeyService HotkeyService { get; private set; } = new();
     public static AutoStartService AutoStartService { get; private set; } = new();
 
-    internal TrayIconManager? _trayIconManager;
+    /// <summary>
+    /// 浏览器桥接服务（V2新增）
+    /// </summary>
+    public static BrowserBridgeService BrowserBridge { get; private set; } = new();
 
+    internal TrayIconManager? _trayIconManager;
     public TrayIconManager? TrayIconMgr => _trayIconManager;
 
     public App()
@@ -52,7 +58,12 @@ public partial class App : Application
 
             // 设置日志级别
             LogService.Instance.CurrentLevel = ConfigService.Config.LogLevel.Equals("Debug", StringComparison.OrdinalIgnoreCase)
-                ? LogLevel.Debug : LogLevel.Info;
+                ? LogLevel.Debug
+                : LogLevel.Info;
+
+            // 启动浏览器桥接服务（V2）
+            BrowserBridge.Start();
+            BrowserBridge.BrowserDataUpdated += OnBrowserDataUpdated;
 
             // 初始化托盘图标
             _trayIconManager = new TrayIconManager(ConfigService, HotkeyService, AutoStartService);
@@ -73,7 +84,7 @@ public partial class App : Application
             HotkeyService.BossKeyPressed += OnBossKeyPressed;
             WindowSwitcher.SwitchCompleted += OnSwitchCompleted;
 
-            LogService.Instance.Info("WinSwitch 启动成功");
+            LogService.Instance.Info("WinSwitch v2.0 启动成功（含浏览器扩展支持）");
         }
         catch (Exception ex)
         {
@@ -91,9 +102,58 @@ public partial class App : Application
             var rule = ConfigService.Config.Rules.FirstOrDefault(r => r.Id == ruleId);
             if (rule != null)
             {
-                WindowSwitcher.Switch(rule);
+                // V2: 如果有浏览器扩展数据且规则使用浏览器匹配模式，优先使用扩展数据
+                if (BrowserBridge.BrowserWindows.Count > 0 &&
+                    rule.BrowserMatchMode != BrowserMatchMode.ActiveTabTitle)
+                {
+                    SwitchWithBrowserData(rule);
+                }
+                else
+                {
+                    WindowSwitcher.Switch(rule);
+                }
             }
         });
+    }
+
+    /// <summary>
+    /// 使用浏览器扩展数据进行窗口切换（V2新增）
+    /// </summary>
+    private void SwitchWithBrowserData(WindowRule rule)
+    {
+        var matchedWindows = BrowserBridge.FindMatchingBrowserWindows(rule);
+        if (matchedWindows.Count == 0)
+        {
+            // 回退到 Win32 模式
+            WindowSwitcher.Switch(rule);
+            return;
+        }
+
+        // 将浏览器窗口与 Win32 HWND 关联
+        var win32Windows = WindowEnumerator.EnumerateAllWindows();
+        BrowserBridge.MatchBrowserWindowsToHwnd(win32Windows);
+
+        foreach (var bw in matchedWindows)
+        {
+            if (bw.MatchedHwnd != IntPtr.Zero)
+            {
+                if (WindowEnumerator.IsForegroundWindow(bw.MatchedHwnd))
+                {
+                    // 前台 → 最小化
+                    NativeMethods.ShowWindow(bw.MatchedHwnd, NativeMethods.SW_MINIMIZE);
+                }
+                else
+                {
+                    // 非前台 → 激活
+                    NativeMethods.ShowWindow(bw.MatchedHwnd, NativeMethods.SW_RESTORE);
+                    NativeMethods.SetForegroundWindow(bw.MatchedHwnd);
+                }
+                return; // 只操作第一个匹配窗口
+            }
+        }
+
+        // 没有匹配到 HWND，回退
+        WindowSwitcher.Switch(rule);
     }
 
     private void OnBossKeyPressed()
@@ -118,9 +178,18 @@ public partial class App : Application
         });
     }
 
+    /// <summary>
+    /// 浏览器数据更新回调（V2新增）
+    /// </summary>
+    private void OnBrowserDataUpdated()
+    {
+        LogService.Instance.Debug($"浏览器数据已更新: {BrowserBridge.BrowserWindows.Count} 个窗口");
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         HotkeyService.UnregisterAll();
+        BrowserBridge.Dispose();
         _trayIconManager?.Dispose();
         base.OnExit(e);
     }

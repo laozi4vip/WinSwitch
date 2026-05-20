@@ -85,6 +85,20 @@ public static class NativeMethods
 
     #endregion
 
+    #region Window Position (V2)
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT
+    {
+        public int Left, Top, Right, Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    #endregion
+
     #region Hotkey
 
     [DllImport("user32.dll", SetLastError = true)]

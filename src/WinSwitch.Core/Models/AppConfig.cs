@@ -78,6 +78,26 @@ public class WindowRule
     /// </summary>
     [JsonIgnore]
     public bool IsBossKeyHidden { get; set; }
+
+    // ===== V2 浏览器扩展匹配 =====
+
+    /// <summary>
+    /// 浏览器匹配模式（V2新增）
+    /// </summary>
+    [JsonProperty("browserMatchMode")]
+    public BrowserMatchMode BrowserMatchMode { get; set; } = BrowserMatchMode.ActiveTabTitle;
+
+    /// <summary>
+    /// URL 匹配模式（V2新增）
+    /// </summary>
+    [JsonProperty("urlPattern")]
+    public string UrlPattern { get; set; } = string.Empty;
+
+    /// <summary>
+    /// URL 匹配方式（V2新增）
+    /// </summary>
+    [JsonProperty("urlMatchType")]
+    public UrlMatchType UrlMatchType { get; set; } = UrlMatchType.Contains;
 }
 
 /// <summary>
@@ -116,4 +136,15 @@ public enum BossKeyMode
 
     /// <summary>隐藏窗口+任务栏+Alt+Tab</summary>
     HideWindowAndTaskbarAndAltTab = 3
+}
+
+/// <summary>
+/// URL匹配方式（V2新增）
+/// </summary>
+public enum UrlMatchType
+{
+    Contains,
+    StartsWith,
+    Exact,
+    Regex
 }

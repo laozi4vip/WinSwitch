@@ -11,45 +11,69 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
-
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.x
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
 
-    - name: Extract version from tag
-      id: version
-      shell: bash
-      run: |
-        TAG=${GITHUB_REF#refs/tags/}
-        echo "version=$TAG" >> $GITHUB_OUTPUT
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "version=$TAG" >> $GITHUB_OUTPUT
 
-    - name: Publish
-      run: |
-        dotnet publish src/WinSwitch.UI/WinSwitch.UI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./publish
+      - name: Publish WinSwitch Main
+        run: |
+          dotnet publish src/WinSwitch.UI/WinSwitch.UI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./publish
 
-    - name: Create ZIP
-      shell: pwsh
-      run: |
-        $version = "${{ steps.version.outputs.version }}"
-        Compress-Archive -Path ./publish/* -DestinationPath "WinSwitch-$version.zip"
+      - name: Publish NativeHost
+        run: |
+          dotnet publish src/WinSwitch.NativeHost/WinSwitch.NativeHost.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./publish-nativehost
 
-        # Generate SHA256
-        $hash = Get-FileHash "WinSwitch-$version.zip" -Algorithm SHA256
-        $hash.Hash + "  WinSwitch-$version.zip" | Out-File -Encoding utf8 "WinSwitch-$version.sha256"
+      - name: Create ZIP
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          
+          # Main app ZIP
+          Compress-Archive -Path ./publish/* -DestinationPath "WinSwitch-$version.zip"
+          $hash = Get-FileHash "WinSwitch-$version.zip" -Algorithm SHA256
+          $hash.Hash + " WinSwitch-$version.zip" | Out-File -Encoding utf8 "WinSwitch-$version.sha256"
+          
+          # NativeHost + BrowserExtension ZIP
+          New-Item -ItemType Directory -Force -Path ./browser-ext
+          Copy-Item ./publish-nativehost/WinSwitch.NativeHost.exe ./browser-ext/
+          Copy-Item ./publish-nativehost/Newtonsoft.Json.dll ./browser-ext/ -ErrorAction SilentlyContinue
+          Copy-Item src/WinSwitch.NativeHost/com.winswitch.bridge.json ./browser-ext/
+          Copy-Item src/WinSwitch.NativeHost/install.ps1 ./browser-ext/
+          Copy-Item -Recurse src/WinSwitch.BrowserExtension/* ./browser-ext/WinSwitch.BrowserExtension/
+          Compress-Archive -Path ./browser-ext/* -DestinationPath "WinSwitch-BrowserExt-$version.zip"
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ steps.version.outputs.version }}
-        name: WinSwitch ${{ steps.version.outputs.version }}
-        draft: false
-        prerelease: false
-        files: |
-          WinSwitch-${{ steps.version.outputs.version }}.zip
-          WinSwitch-${{ steps.version.outputs.version }}.sha256
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: WinSwitch ${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          body: |
+            ## WinSwitch ${{ steps.version.outputs.version }}
+            
+            ### 下载文件说明
+            - `WinSwitch-*.zip` — 主程序（必须）
+            - `WinSwitch-BrowserExt-*.zip` — 浏览器扩展 + NativeHost（V2可选，用于任意标签页/URL匹配）
+            
+            ### 浏览器扩展安装
+            1. 解压 `WinSwitch-BrowserExt-*.zip`
+            2. 以管理员身份运行 `install.ps1`
+            3. Chrome/Edge → 扩展管理 → 开发者模式 → 加载已解压的扩展 → 选择 `WinSwitch.BrowserExtension` 目录
+          files: |
+            WinSwitch-${{ steps.version.outputs.version }}.zip
+            WinSwitch-${{ steps.version.outputs.version }}.sha256
+            WinSwitch-BrowserExt-${{ steps.version.outputs.version }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

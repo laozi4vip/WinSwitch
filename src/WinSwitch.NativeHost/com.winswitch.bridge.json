@@ -1,0 +1,9 @@
+{
+  "name": "com.winswitch.bridge",
+  "description": "WinSwitch Browser Bridge — Native Messaging Host",
+  "path": "WinSwitch.NativeHost.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://*/"
+  ]
+}

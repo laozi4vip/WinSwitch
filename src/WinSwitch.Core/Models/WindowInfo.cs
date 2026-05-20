@@ -12,6 +12,10 @@ public class WindowInfo
     public bool IsVisible { get; set; }
     public bool IsTopLevel { get; set; }
     public int ExStyle { get; set; }
+    public int Left { get; set; }
+    public int Top { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
 
     public override string ToString() => $"[{Handle}] {ProcessName}: {Title}";
 }

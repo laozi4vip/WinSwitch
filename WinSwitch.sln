@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinSwitch.UI", "src\WinSwit
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinSwitch.Tests", "src\WinSwitch.Tests\WinSwitch.Tests.csproj", "{2A647574-A50E-404D-AE5A-D5C0892FAB3B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinSwitch.NativeHost", "src\WinSwitch.NativeHost\WinSwitch.NativeHost.csproj", "{E01140A8-6A2A-4C58-BB53-2897F27F617D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,9 +28,14 @@ Global
 		{2A647574-A50E-404D-AE5A-D5C0892FAB3B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2A647574-A50E-404D-AE5A-D5C0892FAB3B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2A647574-A50E-404D-AE5A-D5C0892FAB3B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E01140A8-6A2A-4C58-BB53-2897F27F617D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E01140A8-6A2A-4C58-BB53-2897F27F617D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E01140A8-6A2A-4C58-BB53-2897F27F617D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E01140A8-6A2A-4C58-BB53-2897F27F617D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{BB88F571-A00E-4EE0-9EEF-D24BF548E6D7} = {CED28869-142A-4ABB-9E5F-6DDD8DDA23B9}
 		{2A647574-A50E-404D-AE5A-D5C0892FAB3B} = {CED28869-142A-4ABB-9E5F-6DDD8DDA23B9}
+		{E01140A8-6A2A-4C58-BB53-2897F27F617D} = {CED28869-142A-4ABB-9E5F-6DDD8DDA23B9}
 	EndGlobalSection
 EndGlobal
