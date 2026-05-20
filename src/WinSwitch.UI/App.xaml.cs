@@ -85,25 +85,37 @@ public partial class App : Application
 
     private void OnHotkeyPressed(string ruleId)
     {
-        var rule = ConfigService.Config.Rules.FirstOrDefault(r => r.Id == ruleId);
-        if (rule != null)
+        // 异步执行切换，避免 WndProc 中同步枚举窗口导致 UI 卡死
+        Task.Run(() =>
         {
-            WindowSwitcher.Switch(rule);
-        }
+            var rule = ConfigService.Config.Rules.FirstOrDefault(r => r.Id == ruleId);
+            if (rule != null)
+            {
+                WindowSwitcher.Switch(rule);
+            }
+        });
     }
 
     private void OnBossKeyPressed()
     {
-        BossKeyService.Toggle();
+        // 异步执行老板键切换
+        Task.Run(() =>
+        {
+            BossKeyService.Toggle();
+        });
     }
 
     private void OnSwitchCompleted(SwitchResult result)
     {
-        if (!result.Success)
+        // 确保在 UI 线程执行
+        Current.Dispatcher.Invoke(() =>
         {
-            TrayIconManager.ShowBalloonTip("WinSwitch", result.Message);
-        }
-        LogService.Instance.Info($"切换结果: {result.Message}");
+            if (!result.Success)
+            {
+                TrayIconManager.ShowBalloonTip("WinSwitch", result.Message);
+            }
+            LogService.Instance.Info($"切换结果: {result.Message}");
+        });
     }
 
     protected override void OnExit(ExitEventArgs e)
