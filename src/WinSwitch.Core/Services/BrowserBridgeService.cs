@@ -162,7 +162,31 @@ public class BrowserBridgeService : IDisposable
 
     private static bool MatchAnyTabTitle(BrowserWindowInfo bw, WindowRule rule)
     {
-        return bw.Tabs.Any(tab => WindowEnumerator.IsTitleMatch(tab.Title, rule.TitlePattern, rule.TitleMatchType));
+        // 任意标签页标题匹配：窗口中至少有N个标签页命中关键词（N=关键词数量，最少1个）
+        // 如果关键词只有一个，则任意标签页命中即匹配
+        // 如果关键词有多个（分号分隔），则窗口中至少需要匹配2个不同的标签页
+        var keywords = rule.TitlePattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (keywords.Length <= 1)
+        {
+            // 单关键词：任意标签页命中即可
+            return bw.Tabs.Any(tab => WindowEnumerator.IsTitleMatch(tab.Title, rule.TitlePattern, rule.TitleMatchType));
+        }
+        
+        // 多关键词：至少需要匹配2个不同的标签页
+        var matchedTabs = new HashSet<int>();
+        foreach (var tab in bw.Tabs)
+        {
+            foreach (var kw in keywords)
+            {
+                if (!string.IsNullOrEmpty(kw) && tab.Title.Contains(kw, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedTabs.Add(tab.TabId);
+                    break; // 每个标签页只计一次
+                }
+            }
+            if (matchedTabs.Count >= 2) return true;
+        }
+        return false;
     }
 
     private static bool MatchAnyTabUrl(BrowserWindowInfo bw, WindowRule rule)
