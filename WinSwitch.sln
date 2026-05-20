@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{CED28869-142A-4ABB-9E5F-6DDD8DDA23B9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinSwitch.UI", "src\WinSwitch.UI\WinSwitch.UI.csproj", "{BB88F571-A00E-4EE0-9EEF-D24BF548E6D7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinSwitch.Tests", "src\WinSwitch.Tests\WinSwitch.Tests.csproj", "{2A647574-A50E-404D-AE5A-D5C0892FAB3B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BB88F571-A00E-4EE0-9EEF-D24BF548E6D7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BB88F571-A00E-4EE0-9EEF-D24BF548E6D7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BB88F571-A00E-4EE0-9EEF-D24BF548E6D7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BB88F571-A00E-4EE0-9EEF-D24BF548E6D7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A647574-A50E-404D-AE5A-D5C0892FAB3B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A647574-A50E-404D-AE5A-D5C0892FAB3B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A647574-A50E-404D-AE5A-D5C0892FAB3B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A647574-A50E-404D-AE5A-D5C0892FAB3B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{BB88F571-A00E-4EE0-9EEF-D24BF548E6D7} = {CED28869-142A-4ABB-9E5F-6DDD8DDA23B9}
+		{2A647574-A50E-404D-AE5A-D5C0892FAB3B} = {CED28869-142A-4ABB-9E5F-6DDD8DDA23B9}
+	EndGlobalSection
+EndGlobal
