@@ -46,11 +46,16 @@ jobs:
           
           # NativeHost + BrowserExtension ZIP
           New-Item -ItemType Directory -Force -Path ./browser-ext
+          New-Item -ItemType Directory -Force -Path ./browser-ext/WinSwitch.BrowserExtension
           Copy-Item ./publish-nativehost/WinSwitch.NativeHost.exe ./browser-ext/
           Copy-Item ./publish-nativehost/Newtonsoft.Json.dll ./browser-ext/ -ErrorAction SilentlyContinue
           Copy-Item src/WinSwitch.NativeHost/com.winswitch.bridge.json ./browser-ext/
           Copy-Item src/WinSwitch.NativeHost/install.ps1 ./browser-ext/
-          Copy-Item -Recurse src/WinSwitch.BrowserExtension/* ./browser-ext/WinSwitch.BrowserExtension/
+          Copy-Item src/WinSwitch.BrowserExtension/manifest.json ./browser-ext/WinSwitch.BrowserExtension/
+          Copy-Item src/WinSwitch.BrowserExtension/background.js ./browser-ext/WinSwitch.BrowserExtension/
+          Copy-Item src/WinSwitch.BrowserExtension/icon16.png ./browser-ext/WinSwitch.BrowserExtension/
+          Copy-Item src/WinSwitch.BrowserExtension/icon48.png ./browser-ext/WinSwitch.BrowserExtension/
+          Copy-Item src/WinSwitch.BrowserExtension/icon128.png ./browser-ext/WinSwitch.BrowserExtension/
           Compress-Archive -Path ./browser-ext/* -DestinationPath "WinSwitch-BrowserExt-$version.zip"
 
       - name: Create Release
