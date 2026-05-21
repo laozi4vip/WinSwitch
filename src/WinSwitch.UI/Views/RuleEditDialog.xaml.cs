@@ -18,7 +18,8 @@ public partial class RuleEditDialog : Window
     private static readonly Dictionary<MatchMode, string> MatchModeNames = new()
     {
         { MatchMode.Fixed, "固定窗口" },
-        { MatchMode.Rule, "规则匹配" }
+        { MatchMode.Rule, "规则匹配" },
+        { MatchMode.ProcessName, "程序名匹配" }
     };
 
     private static readonly Dictionary<TitleMatchType, string> TitleMatchTypeNames = new()
@@ -259,17 +260,27 @@ public partial class RuleEditDialog : Window
     }
 
     private void UpdateTitleFieldsVisibility()
-    {
-        var isRuleMode = Rule.MatchMode == MatchMode.Rule;
-        LblTitlePattern.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
-        TxtTitlePattern.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
-        LblTitleHint.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
-        LblTitleMatchType.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
-        CmbTitleMatchType.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
-    }
+        {
+            var isRuleMode = Rule.MatchMode == MatchMode.Rule;
+            var isProcessMode = Rule.MatchMode == MatchMode.ProcessName;
+            LblTitlePattern.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
+            TxtTitlePattern.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
+            LblTitleHint.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
+            LblTitleMatchType.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
+            CmbTitleMatchType.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
+            // 程序名匹配模式下显示提示
+            if (isProcessMode)
+            {
+                LblProcessNameHint.Text = "程序名匹配模式：按进程名匹配窗口，无需标题规则";
+                LblProcessNameHint.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                LblProcessNameHint.Visibility = Visibility.Collapsed;
+            }
+        }
 
-    // V2: URL 字段根据浏览器匹配模式显示/隐藏
-    // 同时更新标题规则提示文字
+        
     private void UpdateBrowserFieldsVisibility()
     {
         var isUrlMode = Rule.BrowserMatchMode == BrowserMatchMode.AnyTabUrl;

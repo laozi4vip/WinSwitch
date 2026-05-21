@@ -115,7 +115,9 @@ public enum MatchMode
     Fixed,
 
     /// <summary>标题规则匹配</summary>
-    Rule
+    Rule,
+    /// <summary>程序名匹配（按进程名匹配窗口，无需标题规则）</summary>
+    ProcessName
 }
 
 /// <summary>

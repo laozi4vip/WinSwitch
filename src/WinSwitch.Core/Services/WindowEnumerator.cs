@@ -74,14 +74,22 @@ public class WindowEnumerator
     /// </summary>
     public IntPtr FindTargetWindow(WindowRule rule)
     {
-        if (rule.MatchMode == MatchMode.Fixed)
+        return rule.MatchMode switch
         {
-            return FindFixedWindow(rule);
-        }
-        else
-        {
-            return FindRuleWindow(rule);
-        }
+            MatchMode.Fixed => FindFixedWindow(rule),
+            MatchMode.Rule => FindRuleWindow(rule),
+            MatchMode.ProcessName => FindProcessNameWindow(rule),
+            _ => FindRuleWindow(rule)
+        };
+    }
+
+    /// <summary>
+    /// ProcessName 模式：仅按进程名匹配窗口（无需标题规则），返回第一个匹配的可见窗口
+    /// </summary>
+    private IntPtr FindProcessNameWindow(WindowRule rule)
+    {
+        var windows = FindWindowsByProcess(rule.ProcessName);
+        return windows.Count > 0 ? windows[0].Handle : IntPtr.Zero;
     }
 
     /// <summary>
@@ -105,6 +113,7 @@ public class WindowEnumerator
         foreach (var window in windows)
         {
             bool titleMatch = rule.MatchMode == MatchMode.Fixed
+                || rule.MatchMode == MatchMode.ProcessName
                 || string.IsNullOrEmpty(rule.TitlePattern)
                 || IsTitleMatch(window.Title, rule.TitlePattern, rule.TitleMatchType);
 
@@ -172,13 +181,37 @@ public class WindowEnumerator
     }
 
     /// <summary>
-    /// 包含匹配：支持分号分隔的多个关键词，任一匹配即返回 true
-    /// 示例："Chrome;Edge;Firefox" → 标题包含其中任一即匹配
+    /// 包含匹配：支持分号分隔的多个关键词，关键词必须完全匹配（非子串包含）
+    /// 示例："Chrome;Edge;Firefox" → 标题必须完整包含关键词（词边界匹配）
+    /// 支持中文关键词和英文词边界
     /// </summary>
     private static bool MatchContainsAny(string title, string pattern)
     {
         var keywords = pattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return keywords.Any(kw => title.Contains(kw, StringComparison.OrdinalIgnoreCase));
+        return keywords.Any(kw => IsFullKeywordMatch(title, kw));
+    }
+
+    /// <summary>
+    /// 完整关键词匹配：关键词在标题中必须作为完整词/完整段出现，不是子串包含
+    /// 英文：按词边界匹配（\b），中文：直接包含即可（中文无词边界概念）
+    /// </summary>
+    public static bool IsFullKeywordMatch(string title, string keyword)
+    {
+        if (string.IsNullOrEmpty(keyword) || string.IsNullOrEmpty(title))
+            return false;
+
+        // 中文或含非ASCII字符：直接包含匹配（中文无词边界概念）
+        if (keyword.Any(c => c > 0x7F))
+        {
+            return title.Contains(keyword, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // 纯英文/数字关键词：按词边界匹配
+        var escaped = System.Text.RegularExpressions.Regex.Escape(keyword);
+        var regex = new System.Text.RegularExpressions.Regex(
+            @"\b" + escaped + @"\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return regex.IsMatch(title);
     }
 
     /// <summary>

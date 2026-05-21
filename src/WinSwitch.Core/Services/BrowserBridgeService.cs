@@ -333,6 +333,20 @@ public class BrowserBridgeService : IDisposable
         if (bw.Tabs == null) return false;
         var activeTab = bw.Tabs.FirstOrDefault(t => t.Active);
         if (activeTab == null) return false;
+
+        // 浏览器扩展包含匹配模式同样要求关键词数>2
+        if (rule.TitleMatchType == TitleMatchType.Contains)
+        {
+            var keywords = rule.TitlePattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (keywords.Length <= 2)
+            {
+                LogService.Instance.Debug($"浏览器包含匹配(ActiveTabTitle): 关键词数量={keywords.Length}，需要超过2个才能绑定");
+                return false;
+            }
+            // 超过2个关键词时，当前活动标签页需匹配至少一个关键词（完全匹配）
+            return keywords.Any(kw => WindowEnumerator.IsFullKeywordMatch(activeTab.Title, kw));
+        }
+
         return WindowEnumerator.IsTitleMatch(activeTab.Title, rule.TitlePattern, rule.TitleMatchType);
     }
 
@@ -340,26 +354,34 @@ public class BrowserBridgeService : IDisposable
     {
         if (bw.Tabs == null) return false;
         if (string.IsNullOrWhiteSpace(rule.TitlePattern)) return false;
-
         var keywords = rule.TitlePattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (keywords.Length <= 1)
+
+        // 浏览器扩展包含匹配模式：关键词数量必须超过2个才能绑定窗口
+        if (rule.TitleMatchType == TitleMatchType.Contains)
         {
-            return bw.Tabs.Any(tab => !string.IsNullOrEmpty(tab.Title) &&
-                WindowEnumerator.IsTitleMatch(tab.Title, rule.TitlePattern, rule.TitleMatchType));
+            if (keywords.Length <= 2)
+            {
+                LogService.Instance.Debug($"浏览器包含匹配: 关键词数量={keywords.Length}，需要超过2个才能绑定");
+                return false;
+            }
+            // 需要超过2个标签页分别匹配不同关键词
+            var matchedTabCount = 0;
+            foreach (var tab in bw.Tabs)
+            {
+                if (string.IsNullOrEmpty(tab.Title)) continue;
+                var tabMatched = keywords.Any(kw => WindowEnumerator.IsFullKeywordMatch(tab.Title, kw));
+                if (tabMatched)
+                {
+                    matchedTabCount++;
+                    if (matchedTabCount >= 3) return true;
+                }
+            }
+            return false;
         }
 
-        var matchedTabCount = 0;
-        foreach (var tab in bw.Tabs)
-        {
-            if (string.IsNullOrEmpty(tab.Title)) continue;
-            var tabMatched = keywords.Any(kw => tab.Title.Contains(kw, StringComparison.OrdinalIgnoreCase));
-            if (tabMatched)
-            {
-                matchedTabCount++;
-                if (matchedTabCount >= 2) return true;
-            }
-        }
-        return false;
+        // 非包含模式（Regex/StartsWith/Exact）按原逻辑
+        return bw.Tabs.Any(tab => !string.IsNullOrEmpty(tab.Title) &&
+            WindowEnumerator.IsTitleMatch(tab.Title, rule.TitlePattern, rule.TitleMatchType));
     }
 
     private static bool MatchAnyTabUrl(BrowserWindowInfo bw, WindowRule rule)

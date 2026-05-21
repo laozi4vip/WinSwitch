@@ -17,7 +17,7 @@ namespace WinSwitch.UI.Views;
 public class MatchModeConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => value is MatchMode m ? m switch { MatchMode.Fixed => "固定窗口", MatchMode.Rule => "规则匹配", _ => m.ToString() } : value?.ToString() ?? "";
+        => value is MatchMode m ? m switch { MatchMode.Fixed => "固定窗口", MatchMode.Rule => "规则匹配", MatchMode.ProcessName => "程序名匹配", _ => m.ToString() } : value?.ToString() ?? "";
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotImplementedException();
