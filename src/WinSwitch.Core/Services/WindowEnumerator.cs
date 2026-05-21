@@ -113,7 +113,6 @@ public class WindowEnumerator
         foreach (var window in windows)
         {
             bool titleMatch = rule.MatchMode == MatchMode.Fixed
-                || rule.MatchMode == MatchMode.ProcessName
                 || string.IsNullOrEmpty(rule.TitlePattern)
                 || IsTitleMatch(window.Title, rule.TitlePattern, rule.TitleMatchType);
 
