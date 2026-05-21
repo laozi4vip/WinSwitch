@@ -20,6 +20,21 @@ const DEBOUNCE_DELAY = 300; // 300ms 防抖
 // 上次全量同步的窗口数据（用于增量检测）
 let lastSyncedWindows = [];
 
+// 扩展实例 ID（启动时生成，用于多客户端区分）
+const INSTANCE_ID = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).substr(2));
+
+// 检测浏览器类型
+function detectBrowser() {
+  const ua = navigator.userAgent;
+  if (ua.includes("Edg/")) return "msedge";
+  if (ua.includes("OPR/") || ua.includes("Opera")) return "opera";
+  if (ua.includes("Vivaldi")) return "vivaldi";
+  if (ua.includes("Brave")) return "brave";
+  if (ua.includes("Firefox")) return "firefox";
+  return "chrome";
+}
+const BROWSER_NAME = detectBrowser();
+
 /**
  * 连接 Native Messaging Host
  */
@@ -125,6 +140,8 @@ function sendToNative(data) {
   try {
     port.postMessage({
       type: 'browserInfo',
+            browser: BROWSER_NAME,
+            instanceId: INSTANCE_ID,
       windows: data,
       timestamp: Date.now()
     });

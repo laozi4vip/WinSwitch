@@ -49,6 +49,26 @@ public class BrowserWindowInfo
     /// 关联的 Win32 窗口句柄（由主程序匹配后填充）
     /// </summary>
     public IntPtr MatchedHwnd { get; set; }
+
+    /// <summary>
+    /// 来源客户端 ID，WinSwitch 本地生成（不参与 JSON 序列化）
+    /// </summary>
+    public string? SourceClientId { get; set; }
+
+    /// <summary>
+    /// 来源浏览器，例如 chrome / msedge / brave（不参与 JSON 序列化）
+    /// </summary>
+    public string? SourceBrowser { get; set; }
+
+    /// <summary>
+    /// 来源 Profile（不参与 JSON 序列化）
+    /// </summary>
+    public string? SourceProfile { get; set; }
+
+    /// <summary>
+    /// 来源扩展实例 ID（不参与 JSON 序列化）
+    /// </summary>
+    public string? SourceInstanceId { get; set; }
 }
 
 /// <summary>
