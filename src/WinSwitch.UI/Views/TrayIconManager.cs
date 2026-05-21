@@ -117,8 +117,9 @@ public class TrayIconManager : IDisposable
         contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
         contextMenu.Items.Add("退出", null, (_, _) => Application.Current.Shutdown());
-            contextMenu.Items.Add("检查更新", null, (_, _) => CheckForUpdate());
-            contextMenu.Items.Add("关于 WinSwitch", null, (_, _) => ShowAbout());
+        contextMenu.Items.Add("检查更新", null, (_, _) => CheckForUpdate());
+        contextMenu.Items.Add("关于 WinSwitch", null, (_, _) => ShowAbout());
+        contextMenu.Items.Add("退出", null, (_, _) => Application.Current.Shutdown());
 
         _notifyIcon.ContextMenuStrip = contextMenu;
     }
