@@ -5,9 +5,9 @@ using WinSwitch.Core.Models;
 namespace WinSwitch.Core.Services;
 
 /// <summary>
-/// 浏览器桥接服务 — 事件驱动同步 + 本地缓存 + 快捷键直接查缓存
+/// 浏览器桥接服务 - 事件驱动同步 + 本地缓存 + 快捷键直接查缓存
 /// 扩展平时维护浏览器状态 → 变化时同步给 WinSwitch → WinSwitch 保存缓存
-/// 快捷键触发时只查缓存，不等待扩展，确保响应无延迟
+/// 快捷键触发时只查缓存,不等待扩展,确保响应无延迟
 /// </summary>
 public class BrowserBridgeService : IDisposable
 {
@@ -17,7 +17,7 @@ public class BrowserBridgeService : IDisposable
     private Task? _listenTask;
 
     /// <summary>
-    /// 最新接收到的浏览器窗口信息（本地缓存）
+    /// 最新接收到的浏览器窗口信息(本地缓存)
     /// </summary>
     public List<BrowserWindowInfo> BrowserWindows { get; private set; } = new();
 
@@ -37,12 +37,12 @@ public class BrowserBridgeService : IDisposable
     public bool IsConnected => _pipeServer?.IsConnected == true;
 
     /// <summary>
-    /// 缓存是否新鲜（5秒内同步过）
+    /// 缓存是否新鲜(5秒内同步过)
     /// </summary>
     public bool IsCacheFresh => (DateTime.UtcNow - LastSyncTime).TotalSeconds < 5;
 
     /// <summary>
-    /// 缓存是否可用（60秒内同步过）
+    /// 缓存是否可用(60秒内同步过)
     /// </summary>
     public bool IsCacheUsable => (DateTime.UtcNow - LastSyncTime).TotalSeconds < 60;
 
@@ -55,7 +55,7 @@ public class BrowserBridgeService : IDisposable
     {
         _cts = new CancellationTokenSource();
         _listenTask = Task.Run(() => ListenAsync(_cts.Token));
-        LogService.Instance.Info("BrowserBridge 服务已启动，等待浏览器扩展连接...");
+        LogService.Instance.Info("BrowserBridge 服务已启动,等待浏览器扩展连接...");
     }
 
     private async Task ListenAsync(CancellationToken ct)
@@ -81,7 +81,7 @@ public class BrowserBridgeService : IDisposable
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                LogService.Instance.Info($"BrowserBridge 连接异常: {ex.Message}，3秒后重连...");
+                LogService.Instance.Info($"BrowserBridge 连接异常: {ex.Message},3秒后重连...");
                 await Task.Delay(3000, ct);
             }
             finally
@@ -123,7 +123,7 @@ public class BrowserBridgeService : IDisposable
             {
                 BrowserWindows = msg.Windows;
                 LastSyncTime = DateTime.UtcNow;
-                // 详细日志：每个窗口的标签页数量
+                // 详细日志:每个窗口的标签页数量
                 foreach (var bw in BrowserWindows)
                 {
                     LogService.Instance.Debug($"浏览器窗口 {bw.BrowserWindowId}: {bw.Tabs?.Count ?? 0} 个标签页, 焦点={bw.Focused}, 位置=({bw.Left},{bw.Top}), 大小={bw.Width}x{bw.Height}");
@@ -146,7 +146,7 @@ public class BrowserBridgeService : IDisposable
     }
 
     /// <summary>
-    /// 查找匹配指定规则的浏览器窗口（直接查缓存，不请求扩展）
+    /// 查找匹配指定规则的浏览器窗口(直接查缓存,不请求扩展)
     /// </summary>
     public List<BrowserWindowInfo> FindMatchingBrowserWindows(WindowRule rule)
     {
@@ -175,18 +175,18 @@ public class BrowserBridgeService : IDisposable
     private static bool MatchAnyTabTitle(BrowserWindowInfo bw, WindowRule rule)
     {
         // 任意标签页标题匹配
-        // 单关键词：任意标签页命中即匹配（与 ActiveTabTitle 不同的是扫描所有标签页而非仅活动标签页）
-        // 多关键词（分号分隔）：窗口中至少需要匹配2个不同的标签页
+        // 单关键词:任意标签页命中即匹配(与 ActiveTabTitle 不同的是扫描所有标签页而非仅活动标签页)
+        // 多关键词(分号分隔):窗口中至少需要匹配2个不同的标签页
         var keywords = rule.TitlePattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        
+
         if (keywords.Length <= 1)
         {
-            // 单关键词：任意标签页命中即可
-            return bw.Tabs.Any(tab => !string.IsNullOrEmpty(tab.Title) && 
+            // 单关键词:任意标签页命中即可
+            return bw.Tabs.Any(tab => !string.IsNullOrEmpty(tab.Title) &&
                 WindowEnumerator.IsTitleMatch(tab.Title, rule.TitlePattern, rule.TitleMatchType));
         }
-        
-        // 多关键词：至少需要匹配2个不同的标签页
+
+        // 多关键词:至少需要匹配2个不同的标签页
         int matchedCount = 0;
         foreach (var tab in bw.Tabs)
         {
@@ -220,30 +220,35 @@ public class BrowserBridgeService : IDisposable
 
     /// <summary>
     /// 将浏览器窗口与 Win32 HWND 关联
-    /// 策略1: 进程名匹配（最可靠）— 找所有 Chrome/Edge 进程的窗口
-    /// 策略2: 位置+宽高匹配（容差±30像素）— 处理最小化窗口位置偏移
-    /// 策略3: 窗口类名匹配（Chrome_MainWnd / Edge_MainWnd）
+    /// V2.1: 已匹配的 HWND 从候选列表移除，确保多窗口一一对应
+    /// 策略1: 位置+宽高匹配（容差±30像素）
+    /// 策略2: 活动标签页标题匹配
+    /// 策略3: 单窗口自动关联
     /// </summary>
     public void MatchBrowserWindowsToHwnd(List<WindowInfo> win32Windows)
     {
-        // 收集所有浏览器进程的窗口（Chrome、Edge、Brave 等 Chromium 系）
         var browserProcessNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "chrome", "msedge", "brave", "vivaldi", "opera", "firefox"
         };
-        
-        var browserWindows = win32Windows
+
+        // 可用候选列表（匹配后移除，确保一对一）
+        var availableWindows = win32Windows
             .Where(w => browserProcessNames.Contains(w.ProcessName))
             .ToList();
-        
+
+        // 已被占用的 HWND 集合
+        var usedHwnds = new HashSet<IntPtr>();
+
         foreach (var bw in BrowserWindows)
         {
             if (bw.MatchedHwnd != IntPtr.Zero) continue;
-            
+
             // 策略1: 非最小化窗口，用位置+宽高匹配（容差±30像素）
             if (bw.State != "minimized")
             {
-                var posMatched = browserWindows.FirstOrDefault(w =>
+                var posMatched = availableWindows.FirstOrDefault(w =>
+                    !usedHwnds.Contains(w.Handle) &&
                     Math.Abs(w.Left - bw.Left) <= 30 &&
                     Math.Abs(w.Top - bw.Top) <= 30 &&
                     Math.Abs(w.Width - bw.Width) <= 30 &&
@@ -251,34 +256,38 @@ public class BrowserBridgeService : IDisposable
                 if (posMatched != null)
                 {
                     bw.MatchedHwnd = posMatched.Handle;
+                    usedHwnds.Add(posMatched.Handle);
                     LogService.Instance.Debug($"HWND匹配(位置): 浏览器窗口{bw.BrowserWindowId} -> HWND {posMatched.Handle}");
                     continue;
                 }
             }
-            
-            // 策略2: 用浏览器窗口标题与 Win32 窗口标题匹配
-            // Chrome 窗口标题 = 当前活动标签页标题 + " - Google Chrome"
+
+            // 策略2: 用活动标签页标题匹配（排除已占用的HWND）
             var activeTab = bw.Tabs.FirstOrDefault(t => t.Active);
             if (activeTab != null && !string.IsNullOrEmpty(activeTab.Title))
             {
-                var titleMatched = browserWindows.FirstOrDefault(w =>
+                var titleMatched = availableWindows.FirstOrDefault(w =>
+                    !usedHwnds.Contains(w.Handle) &&
                     w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase));
                 if (titleMatched != null)
                 {
                     bw.MatchedHwnd = titleMatched.Handle;
+                    usedHwnds.Add(titleMatched.Handle);
                     LogService.Instance.Debug($"HWND匹配(标题): 浏览器窗口{bw.BrowserWindowId} -> HWND {titleMatched.Handle}");
                     continue;
                 }
             }
-            
-            // 策略3: 如果只有一个浏览器窗口且只有一个 Win32 浏览器窗口，直接关联
-            if (BrowserWindows.Count == 1 && browserWindows.Count >= 1)
+
+            // 策略3: 如果浏览器窗口数 == Win32浏览器窗口数，按顺序关联剩余的
+            var remaining = availableWindows.Where(w => !usedHwnds.Contains(w.Handle)).ToList();
+            if (remaining.Count == 1)
             {
-                bw.MatchedHwnd = browserWindows[0].Handle;
-                LogService.Instance.Debug($"HWND匹配(唯一): 浏览器窗口{bw.BrowserWindowId} -> HWND {browserWindows[0].Handle}");
+                bw.MatchedHwnd = remaining[0].Handle;
+                usedHwnds.Add(remaining[0].Handle);
+                LogService.Instance.Debug($"HWND匹配(唯一剩余): 浏览器窗口{bw.BrowserWindowId} -> HWND {remaining[0].Handle}");
                 continue;
             }
-            
+
             LogService.Instance.Debug($"HWND匹配失败: 浏览器窗口{bw.BrowserWindowId}, state={bw.State}, pos=({bw.Left},{bw.Top}), size={bw.Width}x{bw.Height}");
         }
     }

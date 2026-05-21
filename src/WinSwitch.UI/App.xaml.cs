@@ -173,14 +173,16 @@ public partial class App : Application
             }
         }
 
-        // 级2: 用活动标签页标题在Win32窗口列表中查找
+        // 级2: 用活动标签页标题在Win32窗口列表中查找（排除级1已使用的HWND）
         LogService.Instance.Info("级1-HWND映射失败，尝试用标签页标题查找");
+        var usedHwnds = new HashSet<IntPtr>(matchedWindows.Where(bw => bw.MatchedHwnd != IntPtr.Zero).Select(bw => bw.MatchedHwnd));
         foreach (var bw in matchedWindows)
         {
             var activeTab = bw.Tabs.FirstOrDefault(t => t.Active);
             if (activeTab != null && !string.IsNullOrEmpty(activeTab.Title))
             {
                 var winByTitle = win32Windows.FirstOrDefault(w =>
+                    !usedHwnds.Contains(w.Handle) &&
                     w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase) &&
                     (w.ProcessName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
                      w.ProcessName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
