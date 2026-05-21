@@ -77,15 +77,15 @@ public class TrayIconManager : IDisposable
 
         contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
-        _autoStartItem = new System.Windows.Forms.ToolStripMenuItem("开机自启动");
-        _autoStartItem.Click += (_, _) => ToggleAutoStart();
-        _autoStartItem.Checked = _autoStartService.IsEnabled;
-        contextMenu.Items.Add(_autoStartItem);
-
         _balloonTipItem = new System.Windows.Forms.ToolStripMenuItem("气泡通知");
         _balloonTipItem.Click += (_, _) => ToggleBalloonTip();
         _balloonTipItem.Checked = _configService.Config.BalloonTipEnabled;
         contextMenu.Items.Add(_balloonTipItem);
+
+        _autoStartItem = new System.Windows.Forms.ToolStripMenuItem("开机自启动");
+        _autoStartItem.Click += (_, _) => ToggleAutoStart();
+        _autoStartItem.Checked = _autoStartService.IsEnabled;
+        contextMenu.Items.Add(_autoStartItem);
 
         _silentLaunchItem = new System.Windows.Forms.ToolStripMenuItem("静默启动");
         _silentLaunchItem.Click += (_, _) => ToggleSilentLaunch();
@@ -116,7 +116,6 @@ public class TrayIconManager : IDisposable
 
         contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
-        contextMenu.Items.Add("退出", null, (_, _) => Application.Current.Shutdown());
         contextMenu.Items.Add("检查更新", null, (_, _) => CheckForUpdate());
         contextMenu.Items.Add("关于 WinSwitch", null, (_, _) => ShowAbout());
         contextMenu.Items.Add("退出", null, (_, _) => Application.Current.Shutdown());

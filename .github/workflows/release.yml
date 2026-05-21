@@ -11,6 +11,7 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -34,29 +35,70 @@ jobs:
         run: |
           dotnet publish src/WinSwitch.NativeHost/WinSwitch.NativeHost.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./publish-nativehost
 
-      - name: Create ZIP
+      - name: Create ZIP (with BrowserExt bundled)
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          
-          # Main app ZIP
+
+          # 将 BrowserExt 文件放入主程序目录的 BrowserExt 子目录
+          New-Item -ItemType Directory -Force -Path ./publish/BrowserExt
+          New-Item -ItemType Directory -Force -Path ./publish/BrowserExt/WinSwitch.BrowserExtension
+
+          # NativeHost
+          Copy-Item ./publish-nativehost/WinSwitch.NativeHost.exe ./publish/BrowserExt/
+          Copy-Item ./publish-nativehost/Newtonsoft.Json.dll ./publish/BrowserExt/ -ErrorAction SilentlyContinue
+          Copy-Item src/WinSwitch.NativeHost/com.winswitch.bridge.json ./publish/BrowserExt/
+          Copy-Item src/WinSwitch.NativeHost/install.ps1 ./publish/BrowserExt/
+
+          # 浏览器扩展
+          Copy-Item src/WinSwitch.BrowserExtension/manifest.json ./publish/BrowserExt/WinSwitch.BrowserExtension/
+          Copy-Item src/WinSwitch.BrowserExtension/background.js ./publish/BrowserExt/WinSwitch.BrowserExtension/
+          Copy-Item src/WinSwitch.BrowserExtension/icon16.png ./publish/BrowserExt/WinSwitch.BrowserExtension/
+          Copy-Item src/WinSwitch.BrowserExtension/icon48.png ./publish/BrowserExt/WinSwitch.BrowserExtension/
+          Copy-Item src/WinSwitch.BrowserExtension/icon128.png ./publish/BrowserExt/WinSwitch.BrowserExtension/
+
+          # 压缩合并版 ZIP
           Compress-Archive -Path ./publish/* -DestinationPath "WinSwitch-$version.zip"
           $hash = Get-FileHash "WinSwitch-$version.zip" -Algorithm SHA256
           $hash.Hash + " WinSwitch-$version.zip" | Out-File -Encoding utf8 "WinSwitch-$version.sha256"
-          
-          # NativeHost + BrowserExtension ZIP
-          New-Item -ItemType Directory -Force -Path ./browser-ext
-          New-Item -ItemType Directory -Force -Path ./browser-ext/WinSwitch.BrowserExtension
-          Copy-Item ./publish-nativehost/WinSwitch.NativeHost.exe ./browser-ext/
-          Copy-Item ./publish-nativehost/Newtonsoft.Json.dll ./browser-ext/ -ErrorAction SilentlyContinue
-          Copy-Item src/WinSwitch.NativeHost/com.winswitch.bridge.json ./browser-ext/
-          Copy-Item src/WinSwitch.NativeHost/install.ps1 ./browser-ext/
-          Copy-Item src/WinSwitch.BrowserExtension/manifest.json ./browser-ext/WinSwitch.BrowserExtension/
-          Copy-Item src/WinSwitch.BrowserExtension/background.js ./browser-ext/WinSwitch.BrowserExtension/
-          Copy-Item src/WinSwitch.BrowserExtension/icon16.png ./browser-ext/WinSwitch.BrowserExtension/
-          Copy-Item src/WinSwitch.BrowserExtension/icon48.png ./browser-ext/WinSwitch.BrowserExtension/
-          Copy-Item src/WinSwitch.BrowserExtension/icon128.png ./browser-ext/WinSwitch.BrowserExtension/
-          Compress-Archive -Path ./browser-ext/* -DestinationPath "WinSwitch-BrowserExt-$version.zip"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+
+      - name: Build Installer (.exe)
+        id: installer
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $cleanVer = $version.TrimStart('v')
+
+          # 替换 setup.iss 中的版本号
+          $issPath = "installer/setup.iss"
+          $content = Get-Content $issPath -Raw
+          $oldPattern = [regex]::Escape('#define AppVersion "2.1.5"')
+          $newDefine = "#define AppVersion `"$cleanVer`""
+          $content = $content -replace $oldPattern, $newDefine
+          Set-Content -Path $issPath -Value $content -NoNewline
+
+          # 编译安装程序
+          $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $isccPath $issPath
+
+          # 检查输出
+          $setupPath = "installer\output\WinSwitch-Setup-$cleanVer.exe"
+          if (Test-Path $setupPath) {
+            Write-Host "Installer created successfully"
+            Copy-Item $setupPath "./WinSwitch-Setup-$version.exe"
+            $hash = Get-FileHash "./WinSwitch-Setup-$version.exe" -Algorithm SHA256
+            $hash.Hash + " WinSwitch-Setup-$version.exe" | Out-File -Encoding utf8 "WinSwitch-Setup-$version.sha256"
+            echo "installer_built=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "WARNING: Installer not found, will skip in release"
+            echo "installer_built=false" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -67,18 +109,24 @@ jobs:
           prerelease: false
           body: |
             ## WinSwitch ${{ steps.version.outputs.version }}
-            
+
             ### 下载文件说明
-            - `WinSwitch-*.zip` — 主程序（必须）
-            - `WinSwitch-BrowserExt-*.zip` — 浏览器扩展 + NativeHost（V2可选，用于任意标签页/URL匹配）
-            
-            ### 浏览器扩展安装
-            1. 解压 `WinSwitch-BrowserExt-*.zip`
+            - `WinSwitch-*.zip` — 完整压缩包（主程序 + 浏览器扩展 + NativeHost，解压即用）
+            - `WinSwitch-Setup-*.exe` — Windows 安装版（推荐，自动创建快捷方式、支持开机自启）
+            - `.sha256` — 校验文件
+
+            ### 浏览器扩展安装（V2 功能，可选）
+            1. 解压 ZIP 或安装后，进入 `BrowserExt` 目录
             2. 以管理员身份运行 `install.ps1`
             3. Chrome/Edge → 扩展管理 → 开发者模式 → 加载已解压的扩展 → 选择 `WinSwitch.BrowserExtension` 目录
+            4. 安装后请在 `chrome://extensions` 点击刷新按钮
+
+            ### 升级说明
+            - 如果之前安装过浏览器扩展，更新后请重新运行 `install.ps1` 并在 `chrome://extensions` 刷新扩展
           files: |
             WinSwitch-${{ steps.version.outputs.version }}.zip
             WinSwitch-${{ steps.version.outputs.version }}.sha256
-            WinSwitch-BrowserExt-${{ steps.version.outputs.version }}.zip
+            WinSwitch-Setup-${{ steps.version.outputs.version }}.exe
+            WinSwitch-Setup-${{ steps.version.outputs.version }}.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
