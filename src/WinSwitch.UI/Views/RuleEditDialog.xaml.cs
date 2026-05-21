@@ -293,9 +293,9 @@ public partial class RuleEditDialog : Window
         // 根据浏览器匹配模式更新标题规则提示
         LblTitleHint.Text = Rule.BrowserMatchMode switch
         {
-            BrowserMatchMode.AnyTabTitle => "匹配窗口中任意标签页标题关键词，如：客服工作台;订单管理",
+            BrowserMatchMode.AnyTabTitle => "所有关键词都必须匹配，用分号分隔，如：客服;订单 → 需同时匹配两者",
             BrowserMatchMode.AnyTabUrl => "窗口标题规则（URL匹配为主，标题规则可选）",
-            _ => "包含模式支持分号分隔多关键词，如：Chrome;Edge"
+            _ => "所有关键词都必须完全匹配（用分号分隔），如：Chrome;工作台 → 需同时匹配两者"
         };
     }
 

@@ -112,10 +112,19 @@ public class WindowEnumeratorTests
     }
 
     [Fact]
-    public void IsTitleMatch_Contains_MultipleKeywords_OneMustMatch()
+    public void IsTitleMatch_Contains_MultipleKeywords_AllMustMatch()
     {
-        // 分号分隔多关键词，任一完整匹配即返回 true
+        // 分号分隔多关键词，所有关键词都必须匹配才返回 true
+        // "Chrome;Edge;Firefox" 三个关键词，"My Edge Browser" 只包含 Edge，不全匹配
         var result = WindowEnumerator.IsTitleMatch("My Edge Browser", "Chrome;Edge;Firefox", TitleMatchType.Contains);
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void IsTitleMatch_Contains_MultipleKeywords_AllMatch()
+    {
+        // 两个关键词都匹配
+        var result = WindowEnumerator.IsTitleMatch("Chrome - 客服工作台", "Chrome;客服", TitleMatchType.Contains);
         Assert.True(result);
     }
 

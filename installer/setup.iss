@@ -2,7 +2,7 @@
 ; 用于构建 Windows 安装版 (.exe)
 
 #define AppName "WinSwitch"
-#define AppVersion "2.1.5"
+#define AppVersion "2.1.7"
 #define AppPublisher "laozi4vip"
 #define AppURL "https://github.com/laozi4vip/WinSwitch"
 #define AppExeName "WinSwitch.exe"

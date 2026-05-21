@@ -181,14 +181,14 @@ public class WindowEnumerator
     }
 
     /// <summary>
-    /// 包含匹配：支持分号分隔的多个关键词，关键词必须完全匹配（非子串包含）
-    /// 示例："Chrome;Edge;Firefox" → 标题必须完整包含关键词（词边界匹配）
+    /// 包含匹配：支持分号分隔的多个关键词，所有关键词都必须匹配才算命中
+    /// 示例："Chrome;工作台" → 标题必须同时包含"Chrome"和"工作台"才匹配
     /// 支持中文关键词和英文词边界
     /// </summary>
     private static bool MatchContainsAny(string title, string pattern)
     {
         var keywords = pattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return keywords.Any(kw => IsFullKeywordMatch(title, kw));
+        return keywords.All(kw => IsFullKeywordMatch(title, kw));
     }
 
     /// <summary>

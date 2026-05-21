@@ -32,7 +32,7 @@
                 <TextBlock Text="窗口快捷切换助手" FontSize="13" Margin="8,0,0,0" Opacity="0.6" VerticalAlignment="Center"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Name="TxtVersion" Text="v2.1.6" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Name="TxtVersion" Text="v2.1.7" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <Button Name="BtnCheckUpdate" Content="检查更新" Click="BtnCheckUpdate_Click" Margin="0,0,4,0"/>
                 <TextBlock VerticalAlignment="Center" Margin="4,0,0,0">
                     <Hyperlink Name="AuthorLink" NavigateUri="https://github.com/laozi4vip/WinSwitch" RequestNavigate="AuthorLink_RequestNavigate">作者</Hyperlink>
