@@ -60,10 +60,15 @@
  <TextBlock Name="TxtBossKeyMode" Text="隐藏+任务栏+Alt+Tab" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,12,0"/>
  <TextBlock Name="TxtStatus" Text="就绪" Opacity="0.6" VerticalAlignment="Center"/>
  </StackPanel>
- <StackPanel Grid.Column="1" Orientation="Horizontal">
- <Button Name="BtnBossKeySettings" Content="老板键设置" Click="BtnBossKeySettings_Click"/>
- <Button Name="BtnRefresh" Content="刷新列表" Click="BtnRefresh_Click"/>
- </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <TextBlock Name="TxtVersion" Text="v2.1.2" VerticalAlignment="Center" Opacity="0.6" Margin="0,0,8,0"/>
+                    <Button Name="BtnCheckUpdate" Content="检查更新" Click="BtnCheckUpdate_Click" Margin="0,0,4,0"/>
+                    <Button Name="BtnBossKeySettings" Content="老板键设置" Click="BtnBossKeySettings_Click"/>
+                    <Button Name="BtnRefresh" Content="刷新列表" Click="BtnRefresh_Click"/>
+                    <TextBlock VerticalAlignment="Center" Margin="8,0,0,0">
+                        <Hyperlink Name="AuthorLink" NavigateUri="https://github.com/laozi4vip/WinSwitch" RequestNavigate="AuthorLink_RequestNavigate">作者</Hyperlink>
+                    </TextBlock>
+                </StackPanel>
  </Grid>
  </Grid>
 </Window>
