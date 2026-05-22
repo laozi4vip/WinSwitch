@@ -168,25 +168,37 @@ public partial class App : Application
             bw.MatchedHwnd = IntPtr.Zero;
         BrowserBridge.MatchBrowserWindowsToHwnd(win32Windows);
 
-        // 收集已被其他规则绑定的浏览器窗口ID（跨规则占用检查，防止互控）
-        var takenBrowserWindowIds = new HashSet<int>();
+        // 收集已被其他规则硬绑定的 HWND（HWND 级互斥，同 HWND 不能绑定到两个规则）
+        var takenHwnds = new HashSet<IntPtr>();
         foreach (var r in ConfigService.Config.Rules)
         {
             if (r.Id == rule.Id) continue;
-            if (r.CachedBrowserWindowId != 0)
+            if (r.CachedBrowserHwnd != IntPtr.Zero && NativeMethods.IsWindow(r.CachedBrowserHwnd))
             {
-                takenBrowserWindowIds.Add(r.CachedBrowserWindowId);
+                takenHwnds.Add(r.CachedBrowserHwnd);
             }
         }
 
-        // 过滤掉已被其他规则占用的浏览器窗口
-        var availableWindows = matchedWindows
-            .Where(bw => !takenBrowserWindowIds.Contains(bw.BrowserWindowId))
-            .ToList();
+        // 过滤掉已经被其他规则硬绑定 HWND 的浏览器窗口
+        // 多个相同页面的窗口只要 HWND 不同，就可以分别绑定
+        var availableWindows = new List<BrowserWindowInfo>();
+        foreach (var bw in matchedWindows)
+        {
+            var hwnd = bw.MatchedHwnd;
+            if (hwnd == IntPtr.Zero) hwnd = ResolveHwnd(bw, win32Windows, rule);
+            if (hwnd != IntPtr.Zero && !takenHwnds.Contains(hwnd))
+            {
+                availableWindows.Add(bw);
+            }
+            else
+            {
+                bw.MatchedHwnd = IntPtr.Zero; // 重置，避免干扰后续
+            }
+        }
 
         if (availableWindows.Count == 0)
         {
-            LogService.Instance.Info($"扩展模式: 所有{matchedWindows.Count}个匹配窗口已被其他规则绑定, 回退Win32");
+            LogService.Instance.Info($"扩展模式: 所有{matchedWindows.Count}个匹配窗口的HWND已被其他规则绑定, 回退Win32");
             WindowSwitcher.Switch(rule);
             return;
         }
@@ -198,7 +210,6 @@ public partial class App : Application
             var hWnd = ResolveHwnd(boundWindow, win32Windows, rule);
             if (hWnd != IntPtr.Zero)
             {
-                // 保存 HWND 硬绑定，后续直接按 HWND 操作
                 rule.CachedBrowserHwnd = hWnd;
                 SwitchHwnd(hWnd, rule);
                 return;
