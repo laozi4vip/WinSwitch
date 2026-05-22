@@ -216,9 +216,18 @@ public partial class App : Application
             }
         }
 
-        // 未绑定或绑定失效：优先选择当前焦点窗口，否则选第一个
-        var bestWindow = availableWindows.FirstOrDefault(bw => bw.Focused)
-                         ?? availableWindows.FirstOrDefault();
+        // 未绑定或绑定失效：选择最佳窗口绑定
+        // 策略：多窗口时按位置排序（先Top后Left），确保同站窗口稳定分配
+        // 规则A绑定Top最小/Left最小的窗口，规则B绑定下一个，避免随机分配
+        var sortedWindows = availableWindows
+            .OrderBy(bw => bw.Top)
+            .ThenBy(bw => bw.Left)
+            .ToList();
+
+        // 已被其他规则绑定的 HWND 在 availableWindows 中已排除
+        // 优先选择当前焦点窗口（同一位置），否则选排序后的第一个（稳定分配）
+        var bestWindow = sortedWindows.FirstOrDefault(bw => bw.Focused)
+                         ?? sortedWindows.FirstOrDefault();
 
         if (bestWindow != null)
         {
