@@ -78,9 +78,7 @@ jobs:
           # 替换 setup.iss 中的版本号
           $issPath = "installer/setup.iss"
           $content = Get-Content $issPath -Raw
-          $oldPattern = [regex]::Escape('#define AppVersion "2.1.5"')
-          $newDefine = "#define AppVersion `"$cleanVer`""
-          $content = $content -replace $oldPattern, $newDefine
+          $content = $content -replace '#define AppVersion "[^"]+"', "#define AppVersion `"$cleanVer`""
           Set-Content -Path $issPath -Value $content -NoNewline
 
           # 编译安装程序
