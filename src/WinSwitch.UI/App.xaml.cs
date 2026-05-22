@@ -141,6 +141,20 @@ public partial class App : Application
 
         var matchedWindows = BrowserBridge.FindMatchingBrowserWindows(rule);
 
+        // 级0: 硬绑定优先 —— 如果已绑定了 HWND 且该窗口仍然存在，直接操作，完全绕开所有匹配
+        if (rule.CachedBrowserHwnd != IntPtr.Zero && NativeMethods.IsWindow(rule.CachedBrowserHwnd))
+        {
+            SwitchHwnd(rule.CachedBrowserHwnd, rule);
+            return;
+        }
+
+        // 硬绑定失效，清除状态重新匹配
+        if (rule.CachedBrowserHwnd != IntPtr.Zero)
+        {
+            rule.CachedBrowserHwnd = IntPtr.Zero;
+            rule.CachedBrowserWindowId = 0;
+        }
+
         if (matchedWindows.Count == 0)
         {
             // 回退到 Win32 模式
@@ -184,6 +198,8 @@ public partial class App : Application
             var hWnd = ResolveHwnd(boundWindow, win32Windows, rule);
             if (hWnd != IntPtr.Zero)
             {
+                // 保存 HWND 硬绑定，后续直接按 HWND 操作
+                rule.CachedBrowserHwnd = hWnd;
                 SwitchHwnd(hWnd, rule);
                 return;
             }
@@ -199,6 +215,7 @@ public partial class App : Application
             if (hWnd != IntPtr.Zero)
             {
                 rule.CachedBrowserWindowId = bestWindow.BrowserWindowId;
+                rule.CachedBrowserHwnd = hWnd;
                 SwitchHwnd(hWnd, rule);
                 LogService.Instance.Info($"扩展模式: 绑定窗口 BrowserWindowId={bestWindow.BrowserWindowId}, Focused={bestWindow.Focused}, HWND={hWnd}");
                 return;
