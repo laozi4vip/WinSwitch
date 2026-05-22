@@ -140,6 +140,7 @@ public partial class App : Application
         }
 
         var matchedWindows = BrowserBridge.FindMatchingBrowserWindows(rule);
+
         if (matchedWindows.Count == 0)
         {
             // 回退到 Win32 模式
@@ -149,88 +150,134 @@ public partial class App : Application
 
         // 将浏览器窗口与 Win32 HWND 关联（每次都刷新位置映射）
         var win32Windows = WindowEnumerator.EnumerateAllWindows();
-        // 重置已关联的 HWND，重新匹配
         foreach (var bw in BrowserBridge.BrowserWindows)
             bw.MatchedHwnd = IntPtr.Zero;
         BrowserBridge.MatchBrowserWindowsToHwnd(win32Windows);
 
-        // 级1: 用已匹配的 HWND 操作窗口
-        foreach (var bw in matchedWindows)
+        // 核心逻辑：多窗口同站时，按"前台→最小化，非前台→激活"切换
+        // 优先操作已绑定的窗口（CachedBrowserWindowId），避免轮询
+
+        if (matchedWindows.Count == 1)
         {
-            if (bw.MatchedHwnd != IntPtr.Zero)
+            // 只有一个匹配窗口，直接操作
+            var bw = matchedWindows[0];
+            var hWnd = ResolveHwnd(bw, win32Windows, rule);
+            if (hWnd != IntPtr.Zero)
             {
-                LogService.Instance.Info($"扩展模式操作窗口(级1-HWND): HWND={bw.MatchedHwnd}");
-                if (WindowEnumerator.IsForegroundWindow(bw.MatchedHwnd))
-                {
-                    NativeMethods.ShowWindow(bw.MatchedHwnd, NativeMethods.SW_MINIMIZE);
-                }
-                else
-                {
-                    NativeMethods.ShowWindow(bw.MatchedHwnd, NativeMethods.SW_RESTORE);
-                    NativeMethods.SetForegroundWindow(bw.MatchedHwnd);
-                }
+                SwitchHwnd(hWnd, rule);
+                rule.CachedBrowserWindowId = bw.BrowserWindowId;
                 return;
             }
         }
 
-        // 级2: 用活动标签页标题在Win32窗口列表中查找（排除级1已使用的HWND）
-        LogService.Instance.Info("级1-HWND映射失败，尝试用标签页标题查找");
-        var usedHwnds = new HashSet<IntPtr>(matchedWindows.Where(bw => bw.MatchedHwnd != IntPtr.Zero).Select(bw => bw.MatchedHwnd));
-        foreach (var bw in matchedWindows)
+        // 多个匹配窗口：先找已绑定的窗口
+        var boundWindow = matchedWindows.FirstOrDefault(bw => bw.BrowserWindowId == rule.CachedBrowserWindowId);
+
+        if (boundWindow != null)
         {
-            var activeTab = bw.Tabs.FirstOrDefault(t => t.Active);
-            if (activeTab != null && !string.IsNullOrEmpty(activeTab.Title))
+            var hWnd = ResolveHwnd(boundWindow, win32Windows, rule);
+            if (hWnd != IntPtr.Zero)
             {
-                var winByTitle = win32Windows.FirstOrDefault(w =>
-                    !usedHwnds.Contains(w.Handle) &&
-                    w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase) &&
-                    (w.ProcessName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
-                     w.ProcessName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
-                     w.ProcessName.Equals("brave", StringComparison.OrdinalIgnoreCase) ||
-                     w.ProcessName.Equals("vivaldi", StringComparison.OrdinalIgnoreCase) ||
-                     w.ProcessName.Equals("opera", StringComparison.OrdinalIgnoreCase) ||
-                     w.ProcessName.Equals("firefox", StringComparison.OrdinalIgnoreCase)));
-                if (winByTitle != null && winByTitle.Handle != IntPtr.Zero)
+                if (WindowEnumerator.IsForegroundWindow(hWnd))
                 {
-                    LogService.Instance.Info($"扩展模式操作窗口(级2-标题): HWND={winByTitle.Handle}, 标题='{winByTitle.Title}'");
-                    if (WindowEnumerator.IsForegroundWindow(winByTitle.Handle))
-                        NativeMethods.ShowWindow(winByTitle.Handle, NativeMethods.SW_MINIMIZE);
-                    else
-                    {
-                        NativeMethods.ShowWindow(winByTitle.Handle, NativeMethods.SW_RESTORE);
-                        NativeMethods.SetForegroundWindow(winByTitle.Handle);
-                    }
+                    // 前台 → 最小化
+                    NativeMethods.ShowWindow(hWnd, NativeMethods.SW_MINIMIZE);
+                    LogService.Instance.Info($"扩展模式: 已绑定窗口前台→最小化, HWND={hWnd}");
+                    return;
+                }
+                else
+                {
+                    // 非前台 → 激活
+                    NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
+                    NativeMethods.SetForegroundWindow(hWnd);
+                    LogService.Instance.Info($"扩展模式: 已绑定窗口非前台→激活, HWND={hWnd}");
                     return;
                 }
             }
         }
 
-        // 级3: 用规则关键词在浏览器进程窗口中查找
-        LogService.Instance.Info("级2-标题查找失败，用规则关键词在浏览器窗口中查找");
-        var keywordMatch = win32Windows.FirstOrDefault(w =>
-            (w.ProcessName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
-             w.ProcessName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
-             w.ProcessName.Equals("brave", StringComparison.OrdinalIgnoreCase) ||
-             w.ProcessName.Equals("vivaldi", StringComparison.OrdinalIgnoreCase) ||
-             w.ProcessName.Equals("opera", StringComparison.OrdinalIgnoreCase) ||
-             w.ProcessName.Equals("firefox", StringComparison.OrdinalIgnoreCase)) &&
-            WindowEnumerator.IsTitleMatch(w.Title, rule.TitlePattern, rule.TitleMatchType));
-        if (keywordMatch != null && keywordMatch.Handle != IntPtr.Zero)
+        // 未绑定或绑定失效：选择第一个有 HWND 的窗口绑定
+        foreach (var bw in matchedWindows)
         {
-            LogService.Instance.Info($"扩展模式操作窗口(级3-关键词): HWND={keywordMatch.Handle}, 标题='{keywordMatch.Title}'");
-            if (WindowEnumerator.IsForegroundWindow(keywordMatch.Handle))
-                NativeMethods.ShowWindow(keywordMatch.Handle, NativeMethods.SW_MINIMIZE);
-            else
+            var hWnd = ResolveHwnd(bw, win32Windows, rule);
+            if (hWnd != IntPtr.Zero)
             {
-                NativeMethods.ShowWindow(keywordMatch.Handle, NativeMethods.SW_RESTORE);
-                NativeMethods.SetForegroundWindow(keywordMatch.Handle);
+                // 绑定此窗口
+                rule.CachedBrowserWindowId = bw.BrowserWindowId;
+
+                if (WindowEnumerator.IsForegroundWindow(hWnd))
+                {
+                    NativeMethods.ShowWindow(hWnd, NativeMethods.SW_MINIMIZE);
+                    LogService.Instance.Info($"扩展模式: 新绑定窗口前台→最小化, BrowserWindowId={bw.BrowserWindowId}, HWND={hWnd}");
+                }
+                else
+                {
+                    NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
+                    NativeMethods.SetForegroundWindow(hWnd);
+                    LogService.Instance.Info($"扩展模式: 新绑定窗口非前台→激活, BrowserWindowId={bw.BrowserWindowId}, HWND={hWnd}");
+                }
+                return;
             }
-            return;
         }
 
-        // 级4: 全部失败，回退Win32模式
-        LogService.Instance.Info("所有扩展匹配策略均失败，回退Win32模式");
+        // 所有 HWND 解析都失败，回退 Win32
+        LogService.Instance.Info("扩展模式: 所有HWND解析失败，回退Win32模式");
         WindowSwitcher.Switch(rule);
+    }
+
+    /// <summary>
+    /// 解析浏览器窗口的 HWND（级1: 直接映射 → 级2: 活动标签页标题匹配）
+    /// </summary>
+    private IntPtr ResolveHwnd(BrowserWindowInfo bw, List<WindowInfo> win32Windows, WindowRule rule)
+    {
+        // 级1: 直接 HWND 映射
+        if (bw.MatchedHwnd != IntPtr.Zero && NativeMethods.IsWindow(bw.MatchedHwnd))
+        {
+            return bw.MatchedHwnd;
+        }
+
+        // 级2: 用活动标签页标题匹配
+        var activeTab = bw.Tabs.FirstOrDefault(t => t.Active);
+        if (activeTab != null && !string.IsNullOrEmpty(activeTab.Title))
+        {
+            var winByTitle = win32Windows.FirstOrDefault(w =>
+                w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase)
+                && IsBrowserProcess(w.ProcessName));
+            if (winByTitle != null && winByTitle.Handle != IntPtr.Zero)
+            {
+                return winByTitle.Handle;
+            }
+        }
+
+        return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// 对 HWND 执行切换（前台→最小化，非前台→激活）
+    /// </summary>
+    private void SwitchHwnd(IntPtr hWnd, WindowRule rule)
+    {
+        if (WindowEnumerator.IsForegroundWindow(hWnd))
+        {
+            NativeMethods.ShowWindow(hWnd, NativeMethods.SW_MINIMIZE);
+            LogService.Instance.Info($"扩展模式: 前台→最小化, HWND={hWnd}");
+        }
+        else
+        {
+            NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
+            NativeMethods.SetForegroundWindow(hWnd);
+            LogService.Instance.Info($"扩展模式: 非前台→激活, HWND={hWnd}");
+        }
+    }
+
+    private static bool IsBrowserProcess(string processName)
+    {
+        return processName.Equals("chrome", StringComparison.OrdinalIgnoreCase)
+            || processName.Equals("msedge", StringComparison.OrdinalIgnoreCase)
+            || processName.Equals("brave", StringComparison.OrdinalIgnoreCase)
+            || processName.Equals("vivaldi", StringComparison.OrdinalIgnoreCase)
+            || processName.Equals("opera", StringComparison.OrdinalIgnoreCase)
+            || processName.Equals("firefox", StringComparison.OrdinalIgnoreCase);
     }
 
     private void OnBossKeyPressed()

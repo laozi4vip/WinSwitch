@@ -85,6 +85,12 @@ public class WindowRule
     [JsonIgnore]
     public bool IsBossKeyHidden { get; set; }
 
+    /// <summary>
+    /// 浏览器扩展匹配时绑定的浏览器窗口ID（解决多窗口同站轮询问题）
+    /// </summary>
+    [JsonIgnore]
+    public int CachedBrowserWindowId { get; set; }
+
     // ===== V2 浏览器扩展匹配 =====
 
     /// <summary>
