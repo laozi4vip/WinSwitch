@@ -5,24 +5,22 @@ namespace WinSwitch.Core.Services;
 
 /// <summary>
 /// 老板键服务 — 实现需求 §6.2 三种隐藏模式
-/// V2: 支持浏览器扩展匹配模式
+/// v2.1.1: 统一使用程序名匹配，按进程名隐藏该进程所有窗口
 /// </summary>
 public class BossKeyService
 {
     private readonly WindowEnumerator _enumerator;
     private readonly ConfigService _configService;
-    private readonly BrowserBridgeService? _browserBridge;
 
     /// <summary>
     /// 记录被老板键隐藏的窗口句柄列表，用于恢复
     /// </summary>
     private readonly List<IntPtr> _hiddenWindowHandles = new();
 
-    public BossKeyService(WindowEnumerator enumerator, ConfigService configService, BrowserBridgeService? browserBridge = null)
+    public BossKeyService(WindowEnumerator enumerator, ConfigService configService)
     {
         _enumerator = enumerator;
         _configService = configService;
-        _browserBridge = browserBridge;
     }
 
     /// <summary>
@@ -52,12 +50,14 @@ public class BossKeyService
 
     /// <summary>
     /// 隐藏所有 bossKeyEnabled=true 的窗口
-    /// V2: 有浏览器扩展数据时，也走扩展路径匹配浏览器窗口
+    /// v2.1.1: 统一程序名匹配 — 直接按进程名枚举所有窗口并隐藏
+    /// 不再使用标题匹配或浏览器扩展匹配，彻底避免跨规则误伤
     /// </summary>
     private void Hide()
     {
         var config = _configService.Config;
         var enabledRules = config.Rules.Where(r => r.BossKeyEnabled).ToList();
+
         _hiddenWindowHandles.Clear();
 
         // 收集所有需要隐藏的 HWND（去重）
@@ -65,49 +65,12 @@ public class BossKeyService
 
         foreach (var rule in enabledRules)
         {
-            var matchingHandles = new List<IntPtr>();
+            // v2.1.1: 纯程序名匹配 — 找到该进程的所有窗口
+            var windows = _enumerator.FindWindowsByProcess(rule.ProcessName);
 
-            // 1. Win32 模式匹配
-            var win32Handles = _enumerator.FindAllMatchingWindows(rule);
-            matchingHandles.AddRange(win32Handles);
-
-            // 2. V2: 浏览器扩展匹配（如果有浏览器数据且规则使用扩展模式）
-            if (_browserBridge != null && _browserBridge.HasData)
+            foreach (var win in windows)
             {
-                var browserWindows = _browserBridge.FindMatchingBrowserWindows(rule);
-                if (browserWindows.Count > 0)
-                {
-                    var win32Windows = _enumerator.EnumerateAllWindows();
-                    _browserBridge.MatchBrowserWindowsToHwnd(win32Windows);
-
-                    foreach (var bw in browserWindows)
-                    {
-                        if (bw.MatchedHwnd != IntPtr.Zero)
-                        {
-                            matchingHandles.Add(bw.MatchedHwnd);
-                        }
-                        else
-                        {
-                            // HWND匹配失败，用活动标签页标题查找
-                            var activeTab = bw.Tabs.FirstOrDefault(t => t.Active);
-                            if (activeTab != null && !string.IsNullOrEmpty(activeTab.Title))
-                            {
-                                var winByTitle = win32Windows.FirstOrDefault(w =>
-                                    w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase) &&
-                                    IsBrowserProcess(w.ProcessName));
-                                if (winByTitle != null && winByTitle.Handle != IntPtr.Zero)
-                                {
-                                    matchingHandles.Add(winByTitle.Handle);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 去重并执行隐藏
-            foreach (var hWnd in matchingHandles)
-            {
+                var hWnd = win.Handle;
                 if (hWnd == IntPtr.Zero || !NativeMethods.IsWindow(hWnd)) continue;
                 if (allHandlesToHide.Contains(hWnd)) continue;
 
@@ -131,9 +94,9 @@ public class BossKeyService
                 allHandlesToHide.Add(hWnd);
             }
 
-            rule.IsBossKeyHidden = matchingHandles.Count > 0;
-            rule.CachedExStyle = matchingHandles.Count > 0 
-                ? NativeMethods.GetWindowLongPtr(matchingHandles[0], NativeMethods.GWL_EXSTYLE).ToInt32() 
+            rule.IsBossKeyHidden = windows.Count > 0;
+            rule.CachedExStyle = windows.Count > 0
+                ? NativeMethods.GetWindowLongPtr(windows[0].Handle, NativeMethods.GWL_EXSTYLE).ToInt32()
                 : 0;
         }
 
@@ -182,16 +145,6 @@ public class BossKeyService
 
         IsHidden = false;
         BossKeyToggled?.Invoke(false);
-    }
-
-    private static bool IsBrowserProcess(string processName)
-    {
-        return processName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
-               processName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
-               processName.Equals("brave", StringComparison.OrdinalIgnoreCase) ||
-               processName.Equals("vivaldi", StringComparison.OrdinalIgnoreCase) ||
-               processName.Equals("opera", StringComparison.OrdinalIgnoreCase) ||
-               processName.Equals("firefox", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void RemoveTaskbarIcon(IntPtr hWnd)
