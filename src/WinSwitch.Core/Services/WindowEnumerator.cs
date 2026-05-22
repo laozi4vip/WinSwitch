@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using WinSwitch.Core.Interop;
+using System.Linq;
 using WinSwitch.Core.Models;
 
 namespace WinSwitch.Core.Services;
@@ -108,15 +109,25 @@ public class WindowEnumerator
     public List<IntPtr> FindAllMatchingWindows(WindowRule rule)
     {
         var result = new List<IntPtr>();
-        var windows = FindWindowsByProcess(rule.ProcessName);
 
+        // Fixed 模式：全量返回该进程窗口
+        if (rule.MatchMode == MatchMode.Fixed)
+        {
+            result.AddRange(FindWindowsByProcess(rule.ProcessName).Select(w => w.Handle));
+            return result;
+        }
+
+        // Rule / ProcessName 模式：需要标题过滤
+        // 如果无标题规则，不通过 Win32 匹配（避免误伤同进程其他窗口）
+        if (string.IsNullOrEmpty(rule.TitlePattern))
+        {
+            return result;
+        }
+
+        var windows = FindWindowsByProcess(rule.ProcessName);
         foreach (var window in windows)
         {
-            bool titleMatch = rule.MatchMode == MatchMode.Fixed
-                || string.IsNullOrEmpty(rule.TitlePattern)
-                || IsTitleMatch(window.Title, rule.TitlePattern, rule.TitleMatchType);
-
-            if (titleMatch)
+            if (IsTitleMatch(window.Title, rule.TitlePattern, rule.TitleMatchType))
             {
                 result.Add(window.Handle);
             }

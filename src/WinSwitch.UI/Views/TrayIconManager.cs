@@ -97,20 +97,36 @@ public class TrayIconManager : IDisposable
         // 日志级别子菜单
         var logMenu = new System.Windows.Forms.ToolStripMenuItem("日志级别");
         var debugItem = new System.Windows.Forms.ToolStripMenuItem("Debug");
+        var infoItem = new System.Windows.Forms.ToolStripMenuItem("Info");
         debugItem.Click += (_, _) =>
         {
             LogService.Instance.CurrentLevel = LogLevel.Debug;
             _configService.Config.LogLevel = "Debug";
             _configService.Save();
+            debugItem.Checked = true;
+            infoItem.Checked = false;
         };
-        var infoItem = new System.Windows.Forms.ToolStripMenuItem("Info");
         infoItem.Click += (_, _) =>
         {
             LogService.Instance.CurrentLevel = LogLevel.Info;
             _configService.Config.LogLevel = "Info";
             _configService.Save();
+            infoItem.Checked = true;
+            debugItem.Checked = false;
         };
-        infoItem.Checked = true;
+
+        // 根据当前日志级别初始化选中状态
+        if (_configService.Config.LogLevel.Equals("Debug", StringComparison.OrdinalIgnoreCase))
+        {
+            debugItem.Checked = true;
+            infoItem.Checked = false;
+        }
+        else
+        {
+            infoItem.Checked = true;
+            debugItem.Checked = false;
+        }
+
         logMenu.DropDownItems.AddRange(new[] { debugItem, infoItem });
         contextMenu.Items.Add(logMenu);
 

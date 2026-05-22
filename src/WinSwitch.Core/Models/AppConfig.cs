@@ -91,6 +91,12 @@ public class WindowRule
     [JsonIgnore]
     public int CachedBrowserWindowId { get; set; }
 
+    /// <summary>
+    /// [JsonIgnore] 运行时匹配的 HWND（防止同标题窗口被不同规则重复绑定）
+    /// </summary>
+    [JsonIgnore]
+    public IntPtr MatchedHwnd { get; set; }
+
     // ===== V2 浏览器扩展匹配 =====
 
     /// <summary>

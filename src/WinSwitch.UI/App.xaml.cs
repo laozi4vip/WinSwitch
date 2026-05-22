@@ -226,26 +226,68 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// 解析浏览器窗口的 HWND（级1: 直接映射 → 级2: 活动标签页标题匹配）
+    /// 解析浏览器窗口的 HWND
+    /// 级1: 直接映射 → 级2: 标题匹配(排除已用) → 级3: 位置/尺寸匹配 → 级4: 标题匹配(兜底)
     /// </summary>
     private IntPtr ResolveHwnd(BrowserWindowInfo bw, List<WindowInfo> win32Windows, WindowRule rule)
     {
-        // 级1: 直接 HWND 映射
+        // 级1: 直接 HWND 映射（MatchBrowserWindowsToHwnd 已关联）
         if (bw.MatchedHwnd != IntPtr.Zero && NativeMethods.IsWindow(bw.MatchedHwnd))
         {
             return bw.MatchedHwnd;
         }
 
-        // 级2: 用活动标签页标题匹配
+        // 级2: 标题匹配 —— 优先匹配未被其他规则绑定的 HWND
         var activeTab = bw.Tabs.FirstOrDefault(t => t.Active);
         if (activeTab != null && !string.IsNullOrEmpty(activeTab.Title))
         {
+            // 收集已被其他规则占用的 HWND（CachedBrowserWindowId）
+            var takenHwnds = new HashSet<IntPtr>();
+            foreach (var r in ConfigService.Config.Rules)
+            {
+                if (r.Id == rule.Id) continue;
+                if (r.CachedBrowserWindowId != 0 && r.MatchedHwnd != IntPtr.Zero)
+                {
+                    takenHwnds.Add(r.MatchedHwnd);
+                }
+            }
+
+            // 优先：同标题但未被占用的窗口
             var winByTitle = win32Windows.FirstOrDefault(w =>
-                w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase)
+                !takenHwnds.Contains(w.Handle)
+                && w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase)
                 && IsBrowserProcess(w.ProcessName));
             if (winByTitle != null && winByTitle.Handle != IntPtr.Zero)
             {
+                // 将此 HWND 登记到规则的 MatchedHwnd，防止后续被别的规则误用
+                rule.MatchedHwnd = winByTitle.Handle;
                 return winByTitle.Handle;
+            }
+        }
+
+        // 级3: 位置/尺寸匹配 —— 解决同标题窗口无法区分的问题
+        var posMatched = win32Windows.FirstOrDefault(w =>
+            Math.Abs(w.Left - bw.Left) <= 50 &&
+            Math.Abs(w.Top - bw.Top) <= 50 &&
+            Math.Abs(w.Width - bw.Width) <= 50 &&
+            Math.Abs(w.Height - bw.Height) <= 50 &&
+            IsBrowserProcess(w.ProcessName));
+        if (posMatched != null && posMatched.Handle != IntPtr.Zero)
+        {
+            rule.MatchedHwnd = posMatched.Handle;
+            return posMatched.Handle;
+        }
+
+        // 级4: 标题兜底匹配（忽略占用检查）
+        if (activeTab != null && !string.IsNullOrEmpty(activeTab.Title))
+        {
+            var winByTitle2 = win32Windows.FirstOrDefault(w =>
+                w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase)
+                && IsBrowserProcess(w.ProcessName));
+            if (winByTitle2 != null && winByTitle2.Handle != IntPtr.Zero)
+            {
+                rule.MatchedHwnd = winByTitle2.Handle;
+                return winByTitle2.Handle;
             }
         }
 
