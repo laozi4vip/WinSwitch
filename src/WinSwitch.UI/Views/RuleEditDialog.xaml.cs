@@ -266,15 +266,28 @@ public partial class RuleEditDialog : Window
         {
             var isRuleMode = Rule.MatchMode == MatchMode.Rule;
             var isProcessMode = Rule.MatchMode == MatchMode.ProcessName;
+            var isTaskbarPinMode = Rule.MatchMode == MatchMode.TaskbarPin;
+
             LblTitlePattern.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
             TxtTitlePattern.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
             LblTitleHint.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
             LblTitleMatchType.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
             CmbTitleMatchType.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
-            // 程序名匹配模式下显示提示
+
+            // 任务栏固定模式：显示序号输入
+            LblTaskbarSlot.Visibility = isTaskbarPinMode ? Visibility.Visible : Visibility.Collapsed;
+            TxtTaskbarSlot.Visibility = isTaskbarPinMode ? Visibility.Visible : Visibility.Collapsed;
+            LblTaskbarSlotHint.Visibility = isTaskbarPinMode ? Visibility.Visible : Visibility.Collapsed;
+
+            // 程序名/任务栏固定模式下显示提示
             if (isProcessMode)
             {
                 LblProcessNameHint.Text = "程序名匹配模式：按进程名匹配窗口，无需标题规则";
+                LblProcessNameHint.Visibility = Visibility.Visible;
+            }
+            else if (isTaskbarPinMode)
+            {
+                LblProcessNameHint.Text = "任务栏固定模式：按Win+数字键序号自动解析目标程序";
                 LblProcessNameHint.Visibility = Visibility.Visible;
             }
             else
