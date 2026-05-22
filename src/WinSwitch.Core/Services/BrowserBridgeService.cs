@@ -334,10 +334,13 @@ public class BrowserBridgeService : IDisposable
         var activeTab = bw.Tabs.FirstOrDefault(t => t.Active);
         if (activeTab == null) return false;
 
+        if (string.IsNullOrWhiteSpace(rule.TitlePattern)) return false;
+
         // 浏览器扩展包含匹配模式：所有关键词都必须匹配
         if (rule.TitleMatchType == TitleMatchType.Contains)
         {
             var keywords = rule.TitlePattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (keywords.Length == 0) return false;
             // 所有关键词都必须在活动标签页标题中匹配
             return keywords.All(kw => WindowEnumerator.IsFullKeywordMatch(activeTab.Title, kw));
         }
@@ -350,6 +353,7 @@ public class BrowserBridgeService : IDisposable
         if (bw.Tabs == null) return false;
         if (string.IsNullOrWhiteSpace(rule.TitlePattern)) return false;
         var keywords = rule.TitlePattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (keywords.Length == 0) return false;
 
         // 浏览器扩展包含匹配模式：所有关键词都必须在窗口的标签页中匹配到
         if (rule.TitleMatchType == TitleMatchType.Contains)

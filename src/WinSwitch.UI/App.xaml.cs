@@ -154,68 +154,53 @@ public partial class App : Application
             bw.MatchedHwnd = IntPtr.Zero;
         BrowserBridge.MatchBrowserWindowsToHwnd(win32Windows);
 
-        // 核心逻辑：多窗口同站时，按"前台→最小化，非前台→激活"切换
-        // 优先操作已绑定的窗口（CachedBrowserWindowId），避免轮询
-
-        if (matchedWindows.Count == 1)
+        // 收集已被其他规则绑定的浏览器窗口ID（跨规则占用检查，防止互控）
+        var takenBrowserWindowIds = new HashSet<int>();
+        foreach (var r in ConfigService.Config.Rules)
         {
-            // 只有一个匹配窗口，直接操作
-            var bw = matchedWindows[0];
-            var hWnd = ResolveHwnd(bw, win32Windows, rule);
-            if (hWnd != IntPtr.Zero)
+            if (r.Id == rule.Id) continue;
+            if (r.CachedBrowserWindowId != 0)
             {
-                SwitchHwnd(hWnd, rule);
-                rule.CachedBrowserWindowId = bw.BrowserWindowId;
-                return;
+                takenBrowserWindowIds.Add(r.CachedBrowserWindowId);
             }
         }
 
-        // 多个匹配窗口：先找已绑定的窗口
-        var boundWindow = matchedWindows.FirstOrDefault(bw => bw.BrowserWindowId == rule.CachedBrowserWindowId);
+        // 过滤掉已被其他规则占用的浏览器窗口
+        var availableWindows = matchedWindows
+            .Where(bw => !takenBrowserWindowIds.Contains(bw.BrowserWindowId))
+            .ToList();
 
+        if (availableWindows.Count == 0)
+        {
+            LogService.Instance.Info($"扩展模式: 所有{matchedWindows.Count}个匹配窗口已被其他规则绑定, 回退Win32");
+            WindowSwitcher.Switch(rule);
+            return;
+        }
+
+        // 优先操作已绑定的窗口（CachedBrowserWindowId）
+        var boundWindow = availableWindows.FirstOrDefault(bw => bw.BrowserWindowId == rule.CachedBrowserWindowId);
         if (boundWindow != null)
         {
             var hWnd = ResolveHwnd(boundWindow, win32Windows, rule);
             if (hWnd != IntPtr.Zero)
             {
-                if (WindowEnumerator.IsForegroundWindow(hWnd))
-                {
-                    // 前台 → 最小化
-                    NativeMethods.ShowWindow(hWnd, NativeMethods.SW_MINIMIZE);
-                    LogService.Instance.Info($"扩展模式: 已绑定窗口前台→最小化, HWND={hWnd}");
-                    return;
-                }
-                else
-                {
-                    // 非前台 → 激活
-                    NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
-                    NativeMethods.SetForegroundWindow(hWnd);
-                    LogService.Instance.Info($"扩展模式: 已绑定窗口非前台→激活, HWND={hWnd}");
-                    return;
-                }
+                SwitchHwnd(hWnd, rule);
+                return;
             }
         }
 
-        // 未绑定或绑定失效：选择第一个有 HWND 的窗口绑定
-        foreach (var bw in matchedWindows)
+        // 未绑定或绑定失效：优先选择当前焦点窗口，否则选第一个
+        var bestWindow = availableWindows.FirstOrDefault(bw => bw.Focused)
+                         ?? availableWindows.FirstOrDefault();
+
+        if (bestWindow != null)
         {
-            var hWnd = ResolveHwnd(bw, win32Windows, rule);
+            var hWnd = ResolveHwnd(bestWindow, win32Windows, rule);
             if (hWnd != IntPtr.Zero)
             {
-                // 绑定此窗口
-                rule.CachedBrowserWindowId = bw.BrowserWindowId;
-
-                if (WindowEnumerator.IsForegroundWindow(hWnd))
-                {
-                    NativeMethods.ShowWindow(hWnd, NativeMethods.SW_MINIMIZE);
-                    LogService.Instance.Info($"扩展模式: 新绑定窗口前台→最小化, BrowserWindowId={bw.BrowserWindowId}, HWND={hWnd}");
-                }
-                else
-                {
-                    NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
-                    NativeMethods.SetForegroundWindow(hWnd);
-                    LogService.Instance.Info($"扩展模式: 新绑定窗口非前台→激活, BrowserWindowId={bw.BrowserWindowId}, HWND={hWnd}");
-                }
+                rule.CachedBrowserWindowId = bestWindow.BrowserWindowId;
+                SwitchHwnd(hWnd, rule);
+                LogService.Instance.Info($"扩展模式: 绑定窗口 BrowserWindowId={bestWindow.BrowserWindowId}, Focused={bestWindow.Focused}, HWND={hWnd}");
                 return;
             }
         }
@@ -237,52 +222,53 @@ public partial class App : Application
             return bw.MatchedHwnd;
         }
 
-        // 级2: 标题匹配 —— 优先匹配未被其他规则绑定的 HWND
+        // 构建「已被其他浏览器窗口占用」的 HWND 集合（跨窗口互斥，防止同标题窗口映射漂移）
+        var takenHwnds = new HashSet<IntPtr>();
+        foreach (var rbw in BrowserBridge.BrowserWindows)
+        {
+            if (rbw.BrowserWindowId == bw.BrowserWindowId) continue;
+            if (rbw.MatchedHwnd != IntPtr.Zero && NativeMethods.IsWindow(rbw.MatchedHwnd))
+            {
+                takenHwnds.Add(rbw.MatchedHwnd);
+            }
+        }
+
         var activeTab = bw.Tabs.FirstOrDefault(t => t.Active);
+
+        // 级2: 标题匹配 —— 排除已被其他浏览器窗口占用的 HWND
         if (activeTab != null && !string.IsNullOrEmpty(activeTab.Title))
         {
-            // 收集已被其他规则占用的 HWND（CachedBrowserWindowId）
-            var takenHwnds = new HashSet<IntPtr>();
-            foreach (var r in ConfigService.Config.Rules)
-            {
-                if (r.Id == rule.Id) continue;
-                if (r.CachedBrowserWindowId != 0 && r.MatchedHwnd != IntPtr.Zero)
-                {
-                    takenHwnds.Add(r.MatchedHwnd);
-                }
-            }
-
-            // 优先：同标题但未被占用的窗口
             var winByTitle = win32Windows.FirstOrDefault(w =>
                 !takenHwnds.Contains(w.Handle)
                 && w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase)
                 && IsBrowserProcess(w.ProcessName));
             if (winByTitle != null && winByTitle.Handle != IntPtr.Zero)
             {
-                // 将此 HWND 登记到规则的 MatchedHwnd，防止后续被别的规则误用
                 rule.MatchedHwnd = winByTitle.Handle;
                 return winByTitle.Handle;
             }
         }
 
-        // 级3: 位置/尺寸匹配 —— 解决同标题窗口无法区分的问题
+        // 级3: 位置/尺寸匹配 —— 排除已被其他浏览器窗口占用的 HWND
         var posMatched = win32Windows.FirstOrDefault(w =>
-            Math.Abs(w.Left - bw.Left) <= 50 &&
-            Math.Abs(w.Top - bw.Top) <= 50 &&
-            Math.Abs(w.Width - bw.Width) <= 50 &&
-            Math.Abs(w.Height - bw.Height) <= 50 &&
-            IsBrowserProcess(w.ProcessName));
+            !takenHwnds.Contains(w.Handle)
+            && Math.Abs(w.Left - bw.Left) <= 50
+            && Math.Abs(w.Top - bw.Top) <= 50
+            && Math.Abs(w.Width - bw.Width) <= 50
+            && Math.Abs(w.Height - bw.Height) <= 50
+            && IsBrowserProcess(w.ProcessName));
         if (posMatched != null && posMatched.Handle != IntPtr.Zero)
         {
             rule.MatchedHwnd = posMatched.Handle;
             return posMatched.Handle;
         }
 
-        // 级4: 标题兜底匹配（忽略占用检查）
+        // 级4: 标题兜底匹配 —— 同样排除已被占用的 HWND
         if (activeTab != null && !string.IsNullOrEmpty(activeTab.Title))
         {
             var winByTitle2 = win32Windows.FirstOrDefault(w =>
-                w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase)
+                !takenHwnds.Contains(w.Handle)
+                && w.Title.Contains(activeTab.Title, StringComparison.OrdinalIgnoreCase)
                 && IsBrowserProcess(w.ProcessName));
             if (winByTitle2 != null && winByTitle2.Handle != IntPtr.Zero)
             {
