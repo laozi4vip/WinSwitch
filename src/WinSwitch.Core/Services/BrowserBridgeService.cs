@@ -336,13 +336,15 @@ public class BrowserBridgeService : IDisposable
 
         if (string.IsNullOrWhiteSpace(rule.TitlePattern)) return false;
 
-        // 浏览器扩展包含匹配模式：所有关键词都必须匹配
+        // 浏览器扩展包含匹配模式：所有关键词都必须在窗口的标签页中匹配到
+        // 不仅检查活动标签页，而是检查窗口内所有标签页，确保多窗口同站时能按关键词区分
         if (rule.TitleMatchType == TitleMatchType.Contains)
         {
             var keywords = rule.TitlePattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (keywords.Length == 0) return false;
-            // 所有关键词都必须在活动标签页标题中匹配
-            return keywords.All(kw => WindowEnumerator.IsFullKeywordMatch(activeTab.Title, kw));
+            // 所有关键词必须在这个窗口的标签页中匹配到（不限于活动标签页）
+            return keywords.All(kw => bw.Tabs.Any(tab =>
+                !string.IsNullOrEmpty(tab.Title) && WindowEnumerator.IsFullKeywordMatch(tab.Title, kw)));
         }
 
         return WindowEnumerator.IsTitleMatch(activeTab.Title, rule.TitlePattern, rule.TitleMatchType);
