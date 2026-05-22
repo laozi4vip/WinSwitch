@@ -49,6 +49,12 @@ public class WindowRule
     [JsonProperty("matchMode")]
     public MatchMode MatchMode { get; set; } = MatchMode.Fixed;
 
+    /// <summary>
+    /// 任务栏固定程序序号（1-10，对应 Win+1 到 Win+0，仅 TaskbarPin 模式有效）
+    /// </summary>
+    [JsonProperty("taskbarSlot")]
+    public int TaskbarSlot { get; set; } = 1;
+
     [JsonProperty("processName")]
     public string ProcessName { get; set; } = string.Empty;
 
@@ -135,7 +141,10 @@ public enum MatchMode
     /// <summary>标题规则匹配</summary>
     Rule,
     /// <summary>程序名匹配（按进程名匹配窗口，无需标题规则）</summary>
-    ProcessName
+    ProcessName,
+
+    /// <summary>任务栏固定程序匹配（按Win+数字键序号匹配窗口）</summary>
+    TaskbarPin
 }
 
 /// <summary>

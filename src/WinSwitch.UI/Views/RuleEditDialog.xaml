@@ -17,6 +17,8 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -43,37 +45,42 @@
         <TextBox Grid.Row="4" Grid.Column="1" Name="TxtProcessName" Margin="4" MinHeight="28"/>
             <TextBlock Grid.Row="4" Grid.Column="1" Name="LblProcessNameHint" Margin="4,32,4,0" Text="程序名匹配模式：按进程名匹配窗口，无需标题规则" Opacity="0.5" FontSize="11" TextWrapping="Wrap" Visibility="Collapsed"/>
 
+        <!-- 任务栏序号 -->
+        <TextBlock Grid.Row="5" Grid.Column="0" Text="任务栏序号" VerticalAlignment="Center" Name="LblTaskbarSlot"/>
+        <TextBlock Grid.Row="5" Grid.Column="1" Margin="4,0,4,0" Text="序号 1-10 (对应 Win+1...Win+0)" Opacity="0.5" FontSize="11" Name="LblTaskbarSlotHint" Visibility="Collapsed"/>
+        <TextBox Grid.Row="5" Grid.Column="1" Name="TxtTaskbarSlot" Margin="4" MinHeight="28" Visibility="Collapsed" TextAlignment="Center"/>
+
         <!-- 标题规则 -->
-        <TextBlock Grid.Row="5" Grid.Column="0" Text="标题规则" VerticalAlignment="Center" Name="LblTitlePattern"/>
-        <TextBlock Grid.Row="5" Grid.Column="1" Margin="4,0,4,0" Text="包含模式支持分号分隔多关键词，如：Chrome;Edge" Opacity="0.5" FontSize="11" Name="LblTitleHint" TextWrapping="Wrap"/>
-        <TextBox Grid.Row="6" Grid.Column="1" Name="TxtTitlePattern" Margin="4" MinHeight="28" AcceptsReturn="False"/>
+        <TextBlock Grid.Row="6" Grid.Column="0" Text="标题规则" VerticalAlignment="Center" Name="LblTitlePattern"/>
+        <TextBlock Grid.Row="6" Grid.Column="1" Margin="4,0,4,0" Text="包含模式支持分号分隔多关键词，如：Chrome;Edge" Opacity="0.5" FontSize="11" Name="LblTitleHint" TextWrapping="Wrap"/>
+        <TextBox Grid.Row="7" Grid.Column="1" Name="TxtTitlePattern" Margin="4" MinHeight="28" AcceptsReturn="False"/>
 
         <!-- 标题匹配方式 -->
-        <TextBlock Grid.Row="7" Grid.Column="0" Text="匹配方式" VerticalAlignment="Center" Name="LblTitleMatchType"/>
-        <ComboBox Grid.Row="7" Grid.Column="1" Name="CmbTitleMatchType" Margin="4" MinHeight="28"/>
+        <TextBlock Grid.Row="8" Grid.Column="0" Text="匹配方式" VerticalAlignment="Center" Name="LblTitleMatchType"/>
+        <ComboBox Grid.Row="8" Grid.Column="1" Name="CmbTitleMatchType" Margin="4" MinHeight="28"/>
 
         <!-- V2: 浏览器匹配模式 -->
-        <TextBlock Grid.Row="8" Grid.Column="0" Text="浏览器匹配" VerticalAlignment="Center" Name="LblBrowserMatch"/>
-        <ComboBox Grid.Row="8" Grid.Column="1" Name="CmbBrowserMatchMode" Margin="4" MinHeight="28" SelectionChanged="CmbBrowserMatchMode_SelectionChanged"/>
+        <TextBlock Grid.Row="9" Grid.Column="0" Text="浏览器匹配" VerticalAlignment="Center" Name="LblBrowserMatch"/>
+        <ComboBox Grid.Row="9" Grid.Column="1" Name="CmbBrowserMatchMode" Margin="4" MinHeight="28" SelectionChanged="CmbBrowserMatchMode_SelectionChanged"/>
 
         <!-- V2: URL 匹配规则 -->
-        <TextBlock Grid.Row="9" Grid.Column="0" Text="URL规则" VerticalAlignment="Center" Name="LblUrlPattern"/>
-        <TextBlock Grid.Row="9" Grid.Column="1" Margin="4,0,4,0" Text="浏览器标签页URL匹配规则（需安装浏览器扩展）" Opacity="0.5" FontSize="11" Name="LblUrlHint"/>
-        <TextBox Grid.Row="10" Grid.Column="1" Name="TxtUrlPattern" Margin="4" MinHeight="28" AcceptsReturn="False"/>
+        <TextBlock Grid.Row="10" Grid.Column="0" Text="URL规则" VerticalAlignment="Center" Name="LblUrlPattern"/>
+        <TextBlock Grid.Row="10" Grid.Column="1" Margin="4,0,4,0" Text="浏览器标签页URL匹配规则（需安装浏览器扩展）" Opacity="0.5" FontSize="11" Name="LblUrlHint"/>
+        <TextBox Grid.Row="11" Grid.Column="1" Name="TxtUrlPattern" Margin="4" MinHeight="28" AcceptsReturn="False"/>
 
         <!-- V2: URL 匹配方式 -->
-        <TextBlock Grid.Row="11" Grid.Column="0" Text="URL匹配方式" VerticalAlignment="Center" Name="LblUrlMatchType"/>
-        <ComboBox Grid.Row="11" Grid.Column="1" Name="CmbUrlMatchType" Margin="4" MinHeight="28"/>
+        <TextBlock Grid.Row="12" Grid.Column="0" Text="URL匹配方式" VerticalAlignment="Center" Name="LblUrlMatchType"/>
+        <ComboBox Grid.Row="12" Grid.Column="1" Name="CmbUrlMatchType" Margin="4" MinHeight="28"/>
 
         <!-- 老板键选项 -->
-        <StackPanel Grid.Row="12" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8,0,0">
+        <StackPanel Grid.Row="13" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8,0,0">
             <CheckBox Name="ChkBossKeyEnabled" Content="受老板键控制" IsChecked="True" Margin="4"/>
             <CheckBox Name="ChkHideTaskbar" Content="老板键时隐藏任务栏图标" IsChecked="True" Margin="4"/>
             <CheckBox Name="ChkHideAltTab" Content="老板键时从 Alt+Tab 隐藏" IsChecked="True" Margin="4"/>
         </StackPanel>
 
         <!-- 按钮 -->
-        <StackPanel Grid.Row="14" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+        <StackPanel Grid.Row="15" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Content="确定" Click="BtnOk_Click" IsDefault="True" MinWidth="80"/>
             <Button Content="取消" Click="BtnCancel_Click" IsCancel="True" MinWidth="80"/>
         </StackPanel>

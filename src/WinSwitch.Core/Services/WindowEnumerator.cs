@@ -80,6 +80,7 @@ public class WindowEnumerator
             MatchMode.Fixed => FindFixedWindow(rule),
             MatchMode.Rule => FindRuleWindow(rule),
             MatchMode.ProcessName => FindProcessNameWindow(rule),
+            MatchMode.TaskbarPin => FindTaskbarPinWindow(rule),
             _ => FindRuleWindow(rule)
         };
     }
@@ -91,6 +92,95 @@ public class WindowEnumerator
     {
         var windows = FindWindowsByProcess(rule.ProcessName);
         return windows.Count > 0 ? windows[0].Handle : IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// 查找同一进程的所有窗口
+    /// </summary>
+        /// <summary>
+    /// TaskbarPin 模式：按任务栏固定程序序号匹配窗口
+    /// 读取 Quick Launch User Pinned TaskBar 目录获取目标程序的进程名
+    /// </summary>
+    private IntPtr FindTaskbarPinWindow(WindowRule rule)
+    {
+        var taskbarPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            @"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar");
+
+        if (!Directory.Exists(taskbarPath))
+        {
+            LogService.Instance.Warning($"TaskbarPin: 任务栏固定目录不存在: {taskbarPath}");
+            return IntPtr.Zero;
+        }
+
+        var lnkFiles = Directory.GetFiles(taskbarPath, "*.lnk")
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (rule.TaskbarSlot < 1 || rule.TaskbarSlot > lnkFiles.Count)
+        {
+            LogService.Instance.Warning($"TaskbarPin: 序号 {rule.TaskbarSlot} 超出范围 (1-{lnkFiles.Count})");
+            return IntPtr.Zero;
+        }
+
+        var lnkFile = lnkFiles[rule.TaskbarSlot - 1];
+        var processName = ResolveShortcutTarget(lnkFile);
+        if (string.IsNullOrEmpty(processName))
+        {
+            LogService.Instance.Warning($"TaskbarPin: 无法解析快捷方式: {lnkFile}");
+            return IntPtr.Zero;
+        }
+
+        LogService.Instance.Info($"TaskbarPin: 序号 {rule.TaskbarSlot} -> {processName}");
+
+        var windows = FindWindowsByProcess(processName);
+        if (windows.Count == 0)
+        {
+            var baseName = Path.GetFileNameWithoutExtension(processName);
+            windows = FindWindowsByProcess(baseName);
+        }
+
+        return windows.FirstOrDefault()?.Handle ?? IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// 解析 .lnk 快捷方式的目标文件（使用 IShellLink COM 接口）
+    /// </summary>
+    private static string ResolveShortcutTarget(string lnkPath)
+    {
+        try
+        {
+            // IShellLinkW CLSID
+            var shellLinkType = Type.GetTypeFromCLSID(new Guid("00021401-0000-0000-C000-000000000046"));
+            if (shellLinkType == null) return string.Empty;
+
+            var shellLink = Activator.CreateInstance(shellLinkType);
+            if (shellLink == null) return string.Empty;
+
+            // IPersistFile
+            var persistFile = (System.Runtime.InteropServices.ComTypes.IPersistFile)shellLink;
+            persistFile.Load(lnkPath, 0);
+
+            // IShellLinkW -> GetPath
+            var getPathMethod = shellLinkType.GetMethod("GetPath",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+            if (getPathMethod == null) return string.Empty;
+
+            var sb = new System.Text.StringBuilder(260);
+            var path = sb;
+            var args = new object[] { path, 260, IntPtr.Zero, 0 };
+            getPathMethod.Invoke(shellLink, args);
+
+            // Release COM
+            System.Runtime.InteropServices.Marshal.ReleaseComObject(shellLink);
+
+            return args[0]?.ToString() ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Error($"解析快捷方式失败: {lnkPath}, {ex.Message}");
+            return string.Empty;
+        }
     }
 
     /// <summary>

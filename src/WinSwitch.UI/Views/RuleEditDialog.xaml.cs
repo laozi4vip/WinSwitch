@@ -19,7 +19,8 @@ public partial class RuleEditDialog : Window
     {
         { MatchMode.Fixed, "固定窗口" },
         { MatchMode.Rule, "规则匹配" },
-        { MatchMode.ProcessName, "程序名匹配" }
+        { MatchMode.ProcessName, "程序名匹配" },
+        { MatchMode.TaskbarPin, "任务栏固定" }
     };
 
     private static readonly Dictionary<TitleMatchType, string> TitleMatchTypeNames = new()
@@ -67,7 +68,8 @@ public partial class RuleEditDialog : Window
             // V2
             BrowserMatchMode = existingRule.BrowserMatchMode,
             UrlPattern = existingRule.UrlPattern,
-            UrlMatchType = existingRule.UrlMatchType
+            UrlMatchType = existingRule.UrlMatchType,
+            TaskbarSlot = existingRule.TaskbarSlot
         } : new WindowRule();
 
         // 初始化匹配模式下拉（中文）
@@ -90,6 +92,7 @@ public partial class RuleEditDialog : Window
         TxtName.Text = Rule.Name;
         TxtHotkey.Text = string.IsNullOrEmpty(Rule.Hotkey) ? "点击此处设置快捷键" : Rule.Hotkey;
         TxtProcessName.Text = Rule.ProcessName;
+        TxtTaskbarSlot.Text = Rule.TaskbarSlot.ToString();
         TxtTitlePattern.Text = Rule.TitlePattern;
         TxtUrlPattern.Text = Rule.UrlPattern;
         ChkBossKeyEnabled.IsChecked = Rule.BossKeyEnabled;
@@ -325,6 +328,12 @@ public partial class RuleEditDialog : Window
             return;
         }
 
+        if (Rule.MatchMode == MatchMode.TaskbarPin && (!int.TryParse(TxtTaskbarSlot.Text, out int slotVal) || slotVal < 1 || slotVal > 10))
+        {
+            MessageBox.Show("任务栏模式下必须输入有效的序号 (1-10)", "验证失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         // V2: URL 匹配模式需要填写 URL 规则
         if (Rule.BrowserMatchMode == BrowserMatchMode.AnyTabUrl && string.IsNullOrWhiteSpace(TxtUrlPattern.Text))
         {
@@ -336,6 +345,10 @@ public partial class RuleEditDialog : Window
         Rule.Name = TxtName.Text.Trim();
         Rule.Hotkey = _capturedVk != 0 ? BuildHotkeyString(_capturedModifiers, _capturedVk) : Rule.Hotkey;
         Rule.ProcessName = TxtProcessName.Text.Trim();
+        if (Rule.MatchMode == MatchMode.TaskbarPin && int.TryParse(TxtTaskbarSlot.Text, out int slot))
+        {
+            Rule.TaskbarSlot = slot;
+        }
         Rule.TitlePattern = TxtTitlePattern.Text.Trim();
         Rule.TitleMatchType = (TitleMatchType)CmbTitleMatchType.SelectedIndex;
         Rule.BossKeyEnabled = ChkBossKeyEnabled.IsChecked == true;
