@@ -195,20 +195,65 @@ public static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int vKey);
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool IsIconic(IntPtr hWnd);
 
-    public const uint INPUT_KEYBOARD = 1;
+    // ── SendInput 常量 ──
+    public const int INPUT_KEYBOARD = 1;
+    public const uint KEYEVENTF_KEYDOWN = 0x0000;
     public const uint KEYEVENTF_KEYUP = 0x0002;
-    public const ushort VK_LWIN = 0x5B;
-    public const ushort VK_0 = 0x30;
-    public const ushort VK_1 = 0x31;
 
+    // ── 虚拟键码 ──
+    public const uint VK_LWIN = 0x5B;
+    public const uint VK_RWIN = 0x5C;
+    public const uint VK_LSHIFT = 0xA0;
+    public const uint VK_RSHIFT = 0xA1;
+    public const uint VK_LCONTROL = 0xA2;
+    public const uint VK_RCONTROL = 0xA3;
+    public const uint VK_LMENU = 0xA4;
+    public const uint VK_RMENU = 0xA5;
+    public const uint VK_0 = 0x30;
+    public const uint VK_1 = 0x31;
+    public const uint VK_2 = 0x32;
+    public const uint VK_3 = 0x33;
+    public const uint VK_4 = 0x34;
+    public const uint VK_5 = 0x35;
+    public const uint VK_6 = 0x36;
+    public const uint VK_7 = 0x37;
+    public const uint VK_8 = 0x38;
+    public const uint VK_9 = 0x39;
+
+    // ── SendInput 结构体（使用 Union 布局） ──
     [StructLayout(LayoutKind.Sequential)]
     public struct INPUT
     {
-        public uint type;
+        public int type;
+        public InputUnion U;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    public struct InputUnion
+    {
+        [FieldOffset(0)]
+        public MOUSEINPUT mi;
+        [FieldOffset(0)]
         public KEYBDINPUT ki;
+        [FieldOffset(0)]
+        public HARDWAREINPUT hi;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MOUSEINPUT
+    {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -221,41 +266,129 @@ public static class NativeMethods
         public IntPtr dwExtraInfo;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct HARDWAREINPUT
+    {
+        public uint uMsg;
+        public ushort wParamL;
+        public ushort wParamH;
+    }
+
     /// <summary>
-    /// 模拟 Win+数字键（激活任务栏第N个应用）
-    /// number: 1~9 对应 Win+1~Win+9, 0 对应 Win+0 (第10个)
+    /// 获取数字对应的虚拟键码 (0-9)
+    /// </summary>
+    public static uint GetNumberVk(int number)
+    {
+        return number switch
+        {
+            0 => VK_0,
+            1 => VK_1,
+            2 => VK_2,
+            3 => VK_3,
+            4 => VK_4,
+            5 => VK_5,
+            6 => VK_6,
+            7 => VK_7,
+            8 => VK_8,
+            9 => VK_9,
+            _ => VK_0
+        };
+    }
+
+    /// <summary>
+    /// 发送 Win + 数字键组合，模拟切换任务栏应用
+    /// 关键：先释放当前物理按下的修饰键，避免组合键冲突
     /// </summary>
     public static void SendWinNumber(int number)
     {
         if (number < 0 || number > 9) return;
-        ushort vkNumber = number == 0 ? VK_0 : (ushort)(VK_1 + number - 1);
+        uint vkNumber = GetNumberVk(number);
 
-        INPUT[] inputs = new INPUT[]
-        {
-            KeyDown(VK_LWIN),
-            KeyDown(vkNumber),
-            KeyUp(vkNumber),
-            KeyUp(VK_LWIN)
-        };
+        // 关键：先释放用户当前按住的修饰键（Ctrl/Alt/Shift）
+        // 否则 SendInput 的 Win+数字会变成 Ctrl+Alt+Win+数字
+        ReleaseModifiers();
+        Thread.Sleep(30);
 
-        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
+        // 发送 Win↓ → 数字↓ → 数字↑ → Win↑（每步间加延迟）
+        SendKeyDown(VK_LWIN);
+        Thread.Sleep(50);
+        SendKeyDown(vkNumber);
+        Thread.Sleep(30);
+        SendKeyUp(vkNumber);
+        Thread.Sleep(30);
+        SendKeyUp(VK_LWIN);
     }
 
-    private static INPUT KeyDown(ushort vk)
+    /// <summary>
+    /// 释放所有当前按下的修饰键（Ctrl/Alt/Shift/Win）
+    /// 通过 GetAsyncKeyState 检测物理按键状态，只释放实际按下的键
+    /// </summary>
+    public static void ReleaseModifiers()
+    {
+        TryReleaseKey(VK_LCONTROL, 0x11);
+        TryReleaseKey(VK_RCONTROL, 0x11);
+        TryReleaseKey(VK_LMENU, 0x12);
+        TryReleaseKey(VK_RMENU, 0x12);
+        TryReleaseKey(VK_LSHIFT, 0x10);
+        TryReleaseKey(VK_RSHIFT, 0x10);
+    }
+
+    /// <summary>
+    /// 检测指定 VK 是否物理按下，如果是则发送释放
+    /// </summary>
+    private static void TryReleaseKey(uint vk, int vkCheck)
+    {
+        short state = GetAsyncKeyState(vkCheck);
+        if ((state & 0x8000) != 0)
+        {
+            SendKeyUp(vk);
+        }
+    }
+
+    /// <summary>
+    /// 发送按键按下
+    /// </summary>
+    public static void SendKeyDown(uint vk)
+    {
+        var input = MakeKeyboardInput(vk, KEYEVENTF_KEYDOWN);
+        uint sent = SendInput(1, new[] { input }, Marshal.SizeOf<INPUT>());
+        if (sent == 0)
+        {
+            int err = Marshal.GetLastWin32Error();
+            System.Diagnostics.Trace.TraceError($"SendKeyDown 失败: vk=0x{vk:X2}, Win32Error={err}");
+        }
+    }
+
+    /// <summary>
+    /// 发送按键抬起
+    /// </summary>
+    public static void SendKeyUp(uint vk)
+    {
+        var input = MakeKeyboardInput(vk, KEYEVENTF_KEYUP);
+        uint sent = SendInput(1, new[] { input }, Marshal.SizeOf<INPUT>());
+        if (sent == 0)
+        {
+            int err = Marshal.GetLastWin32Error();
+            System.Diagnostics.Trace.TraceError($"SendKeyUp 失败: vk=0x{vk:X2}, Win32Error={err}");
+        }
+    }
+
+    private static INPUT MakeKeyboardInput(uint vk, uint flags)
     {
         return new INPUT
         {
             type = INPUT_KEYBOARD,
-            ki = new KEYBDINPUT { wVk = vk, dwFlags = 0 }
-        };
-    }
-
-    private static INPUT KeyUp(ushort vk)
-    {
-        return new INPUT
-        {
-            type = INPUT_KEYBOARD,
-            ki = new KEYBDINPUT { wVk = vk, dwFlags = KEYEVENTF_KEYUP }
+            U = new InputUnion
+            {
+                ki = new KEYBDINPUT
+                {
+                    wVk = (ushort)vk,
+                    wScan = 0,
+                    dwFlags = flags,
+                    time = 0,
+                    dwExtraInfo = IntPtr.Zero
+                }
+            }
         };
     }
 
