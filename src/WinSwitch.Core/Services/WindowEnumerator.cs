@@ -95,12 +95,11 @@ public class WindowEnumerator
     }
 
     /// <summary>
-    /// 查找同一进程的所有窗口
-    /// </summary>
-        /// <summary>
-    /// TaskbarPin 模式：模拟 Win+数字键来激活任务栏对应序号的程序
-    /// 不解析 .lnk 文件，直接调用系统 Win+1~Win+0 行为
-    /// 返回模拟后的前台窗口句柄，用于后续窗口控制逻辑
+    /// <summary>
+    /// <summary>
+    /// TaskbarPin 模式：模拟 Win+数字键来激活任务栏对应序号的程序。
+    /// 不解析 .lnk 文件，直接调用系统 Win+1~Win+0 行为。
+    /// 返回模拟后的前台窗口句柄，用于后续窗口控制逻辑。
     /// </summary>
     private IntPtr FindTaskbarPinWindow(WindowRule rule)
     {
@@ -110,26 +109,39 @@ public class WindowEnumerator
             return IntPtr.Zero;
         }
 
-        LogService.Instance.Info($"TaskbarPin: 序号 {rule.TaskbarSlot} -> 模拟 Win+{rule.TaskbarSlot}");
+        var numberKey = rule.TaskbarSlot == 10 ? 0 : rule.TaskbarSlot;
+        var keyText = rule.TaskbarSlot == 10 ? "0" : rule.TaskbarSlot.ToString();
+        LogService.Instance.Info($"TaskbarPin: 序号 {rule.TaskbarSlot} -> 模拟 Win+{keyText}");
 
-        // 记录当前前台窗口，用于判断切换效果
         var beforeHwnd = NativeMethods.GetForegroundWindow();
-
-        // 直接模拟系统 Win+数字键
-        NativeMethods.SendWinNumber(rule.TaskbarSlot == 10 ? 0 : rule.TaskbarSlot);
+        NativeMethods.SendWinNumber(numberKey);
 
         // 等待系统切换窗口
-        Thread.Sleep(200);
+        Thread.Sleep(250);
 
         var afterHwnd = NativeMethods.GetForegroundWindow();
 
-        if (afterHwnd == IntPtr.Zero || afterHwnd == beforeHwnd)
+        if (afterHwnd == IntPtr.Zero)
         {
-            LogService.Instance.Warning($"TaskbarPin: Win+{rule.TaskbarSlot} 未切换前台窗口");
+            LogService.Instance.Warning($"TaskbarPin: Win+{keyText} 后未获取到前台窗口");
+            return IntPtr.Zero;
         }
 
+        if (afterHwnd == beforeHwnd)
+        {
+            LogService.Instance.Debug($"TaskbarPin: Win+{keyText} 后前台窗口未变化，可能目标已在前台");
+        }
+        else
+        {
+            LogService.Instance.Debug($"TaskbarPin: Win+{keyText} 后前台窗口已变化: {beforeHwnd} -> {afterHwnd}");
+        }
+
+        _lastTaskbarPinBeforeHwnd = beforeHwnd;
         return afterHwnd;
     }
+
+    // 记录 TaskbarPin 模拟按键前的前台窗口，用于判断是否需要最小化
+    private IntPtr _lastTaskbarPinBeforeHwnd = IntPtr.Zero;
 
     /// <summary>
     /// 查找同一进程的所有窗口
@@ -148,6 +160,12 @@ public class WindowEnumerator
     {
         var result = new List<IntPtr>();
 
+
+            // TaskbarPin 模式：不在此处产生激活副作用，由 FindTargetWindow/Switch 处理
+            if (rule.MatchMode == MatchMode.TaskbarPin)
+            {
+                return result;
+            }
         // Fixed 模式：全量返回该进程窗口
         if (rule.MatchMode == MatchMode.Fixed)
         {

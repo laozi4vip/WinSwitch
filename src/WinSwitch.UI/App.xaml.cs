@@ -115,7 +115,12 @@ public partial class App : Application
             if (rule != null)
             {
                 // V2: 有浏览器扩展缓存数据时，全部走扩展路径
-                if (BrowserBridge.HasData)
+                // TaskbarPin 模式始终走 WindowSwitcher（模拟 Win+数字键）
+                if (rule.MatchMode == MatchMode.TaskbarPin)
+                {
+                    WindowSwitcher.Switch(rule);
+                }
+                else if (BrowserBridge.HasData)
                 {
                     SwitchWithBrowserData(rule);
                 }

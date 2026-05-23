@@ -27,7 +27,8 @@ public class WindowSwitcher
     public SwitchResult Switch(WindowRule rule)
     {
         // TaskbarPin 模式：FindTargetWindow 已模拟 Win+数字键
-        // 系统已自行处理窗口激活/切换/启动，直接返回成功
+        // 如果窗口切换了（前台变了），说明用户想激活它，不要立刻最小化
+        // 如果窗口没变（目标已在前台），则可以最小化
         if (rule.MatchMode == MatchMode.TaskbarPin)
         {
             var hWnd = _enumerator.FindTargetWindow(rule);
@@ -36,8 +37,16 @@ public class WindowSwitcher
                 SwitchCompleted?.Invoke(SwitchResult.NotFound(rule));
                 return SwitchResult.NotFound(rule);
             }
-            SwitchCompleted?.Invoke(SwitchResult.Activated(rule));
-            return SwitchResult.Activated(rule);
+            // 前台窗口发生了切换 → 刚被激活，不做最小化
+            if (_enumerator.IsForegroundWindow(hWnd))
+            {
+                SwitchCompleted?.Invoke(SwitchResult.Activated(rule));
+                return SwitchResult.Activated(rule);
+            }
+            // 前台窗口没变 → 目标已在前台，执行最小化
+            NativeMethods.ShowWindow(hWnd, NativeMethods.SW_MINIMIZE);
+            SwitchCompleted?.Invoke(SwitchResult.Minimized(rule));
+            return SwitchResult.Minimized(rule);
         }
 
         var hWnd2 = _enumerator.FindTargetWindow(rule);
