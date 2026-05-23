@@ -98,85 +98,37 @@ public class WindowEnumerator
     /// 查找同一进程的所有窗口
     /// </summary>
         /// <summary>
-    /// TaskbarPin 模式：按任务栏固定程序序号匹配窗口
-    /// 读取 Quick Launch User Pinned TaskBar 目录获取目标程序的进程名
+    /// TaskbarPin 模式：模拟 Win+数字键来激活任务栏对应序号的程序
+    /// 不解析 .lnk 文件，直接调用系统 Win+1~Win+0 行为
+    /// 返回模拟后的前台窗口句柄，用于后续窗口控制逻辑
     /// </summary>
     private IntPtr FindTaskbarPinWindow(WindowRule rule)
     {
-        var taskbarPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            @"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar");
-
-        if (!Directory.Exists(taskbarPath))
+        if (rule.TaskbarSlot < 1 || rule.TaskbarSlot > 10)
         {
-            LogService.Instance.Warning($"TaskbarPin: 目录不存在: {taskbarPath}");
+            LogService.Instance.Warning($"TaskbarPin: 序号 {rule.TaskbarSlot} 无效，应为 1-10");
             return IntPtr.Zero;
         }
 
-        var lnkFiles = Directory.GetFiles(taskbarPath, "*.lnk")
-            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        LogService.Instance.Info($"TaskbarPin: 序号 {rule.TaskbarSlot} -> 模拟 Win+{rule.TaskbarSlot}");
 
-        if (lnkFiles.Count == 0)
+        // 记录当前前台窗口，用于判断切换效果
+        var beforeHwnd = NativeMethods.GetForegroundWindow();
+
+        // 直接模拟系统 Win+数字键
+        NativeMethods.SendWinNumber(rule.TaskbarSlot == 10 ? 0 : rule.TaskbarSlot);
+
+        // 等待系统切换窗口
+        Thread.Sleep(200);
+
+        var afterHwnd = NativeMethods.GetForegroundWindow();
+
+        if (afterHwnd == IntPtr.Zero || afterHwnd == beforeHwnd)
         {
-            LogService.Instance.Warning("TaskbarPin: 未找到任何固定程序快捷方式");
-            return IntPtr.Zero;
+            LogService.Instance.Warning($"TaskbarPin: Win+{rule.TaskbarSlot} 未切换前台窗口");
         }
 
-        if (rule.TaskbarSlot < 1 || rule.TaskbarSlot > lnkFiles.Count)
-        {
-            LogService.Instance.Warning($"TaskbarPin: 序号 {rule.TaskbarSlot} 超范围 (1-{lnkFiles.Count})");
-            return IntPtr.Zero;
-        }
-
-        var lnkFile = lnkFiles[rule.TaskbarSlot - 1];
-        var targetPath = ResolveShortcutTarget(lnkFile);
-        if (string.IsNullOrEmpty(targetPath))
-        {
-            LogService.Instance.Warning($"TaskbarPin: 无法解析: {lnkFile}");
-            return IntPtr.Zero;
-        }
-
-        var processName = Path.GetFileNameWithoutExtension(targetPath);
-        LogService.Instance.Info($"TaskbarPin: 序号 {rule.TaskbarSlot} -> {targetPath} -> {processName}");
-
-        var windows = FindWindowsByProcess(processName);
-        if (windows.Count > 0) return windows[0].Handle;
-
-        // 尝试带 .exe 后缀
-        windows = FindWindowsByProcess(processName + ".exe");
-        if (windows.Count > 0) return windows[0].Handle;
-
-        LogService.Instance.Warning($"TaskbarPin: 未找到进程 {processName} 的窗口");
-        return IntPtr.Zero;
-    }
-
-    /// <summary>
-    /// 解析 .lnk 快捷方式的目标文件路径（使用 WScript.Shell COM）
-    /// </summary>
-    private static string ResolveShortcutTarget(string lnkPath)
-    {
-        try
-        {
-            var shellType = Type.GetTypeFromProgID("WScript.Shell");
-            if (shellType == null) return string.Empty;
-
-            dynamic? shell = Activator.CreateInstance(shellType);
-            if (shell == null) return string.Empty;
-
-            dynamic shortcut = shell.CreateShortcut(lnkPath);
-            var target = (string?)shortcut.TargetPath;
-
-            System.Runtime.InteropServices.Marshal.ReleaseComObject(shortcut);
-            System.Runtime.InteropServices.Marshal.ReleaseComObject(shell);
-
-            return target ?? string.Empty;
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Error($"解析快捷方式失败: {lnkPath}, {ex.Message}");
-            return string.Empty;
-        }
+        return afterHwnd;
     }
 
     /// <summary>

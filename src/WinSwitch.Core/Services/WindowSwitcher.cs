@@ -26,25 +26,39 @@ public class WindowSwitcher
     /// </summary>
     public SwitchResult Switch(WindowRule rule)
     {
-        var hWnd = _enumerator.FindTargetWindow(rule);
+        // TaskbarPin 模式：FindTargetWindow 已模拟 Win+数字键
+        // 系统已自行处理窗口激活/切换/启动，直接返回成功
+        if (rule.MatchMode == MatchMode.TaskbarPin)
+        {
+            var hWnd = _enumerator.FindTargetWindow(rule);
+            if (hWnd == IntPtr.Zero)
+            {
+                SwitchCompleted?.Invoke(SwitchResult.NotFound(rule));
+                return SwitchResult.NotFound(rule);
+            }
+            SwitchCompleted?.Invoke(SwitchResult.Activated(rule));
+            return SwitchResult.Activated(rule);
+        }
 
-        if (hWnd == IntPtr.Zero)
+        var hWnd2 = _enumerator.FindTargetWindow(rule);
+
+        if (hWnd2 == IntPtr.Zero)
         {
             SwitchCompleted?.Invoke(SwitchResult.NotFound(rule));
             return SwitchResult.NotFound(rule);
         }
 
-        if (_enumerator.IsForegroundWindow(hWnd))
+        if (_enumerator.IsForegroundWindow(hWnd2))
         {
             // 前台窗口 → 最小化
-            NativeMethods.ShowWindow(hWnd, NativeMethods.SW_MINIMIZE);
+            NativeMethods.ShowWindow(hWnd2, NativeMethods.SW_MINIMIZE);
             SwitchCompleted?.Invoke(SwitchResult.Minimized(rule));
             return SwitchResult.Minimized(rule);
         }
         else
         {
             // 非前台窗口 → 多级激活策略
-            return ActivateWindow(hWnd, rule);
+            return ActivateWindow(hWnd2, rule);
         }
     }
 

@@ -287,7 +287,7 @@ public partial class RuleEditDialog : Window
             }
             else if (isTaskbarPinMode)
             {
-                LblProcessNameHint.Text = "任务栏固定模式：按Win+数字键序号自动解析目标程序";
+                LblProcessNameHint.Text = "任务栏快捷键模式：模拟 Win+数字键 激活任务栏对应位置的应用";
                 LblProcessNameHint.Visibility = Visibility.Visible;
             }
             else

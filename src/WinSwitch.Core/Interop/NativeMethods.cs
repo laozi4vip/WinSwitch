@@ -189,4 +189,75 @@ public static class NativeMethods
     public const int WM_HOTKEY = 0x0312;
 
     #endregion
+
+    #region Simulated Input (Taskbar Hotkey)
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool IsIconic(IntPtr hWnd);
+
+    public const uint INPUT_KEYBOARD = 1;
+    public const uint KEYEVENTF_KEYUP = 0x0002;
+    public const ushort VK_LWIN = 0x5B;
+    public const ushort VK_0 = 0x30;
+    public const ushort VK_1 = 0x31;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct INPUT
+    {
+        public uint type;
+        public KEYBDINPUT ki;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct KEYBDINPUT
+    {
+        public ushort wVk;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
+    /// <summary>
+    /// 模拟 Win+数字键（激活任务栏第N个应用）
+    /// number: 1~9 对应 Win+1~Win+9, 0 对应 Win+0 (第10个)
+    /// </summary>
+    public static void SendWinNumber(int number)
+    {
+        if (number < 0 || number > 9) return;
+        ushort vkNumber = number == 0 ? VK_0 : (ushort)(VK_1 + number - 1);
+
+        INPUT[] inputs = new INPUT[]
+        {
+            KeyDown(VK_LWIN),
+            KeyDown(vkNumber),
+            KeyUp(vkNumber),
+            KeyUp(VK_LWIN)
+        };
+
+        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
+    }
+
+    private static INPUT KeyDown(ushort vk)
+    {
+        return new INPUT
+        {
+            type = INPUT_KEYBOARD,
+            ki = new KEYBDINPUT { wVk = vk, dwFlags = 0 }
+        };
+    }
+
+    private static INPUT KeyUp(ushort vk)
+    {
+        return new INPUT
+        {
+            type = INPUT_KEYBOARD,
+            ki = new KEYBDINPUT { wVk = vk, dwFlags = KEYEVENTF_KEYUP }
+        };
+    }
+
+    #endregion
 }
