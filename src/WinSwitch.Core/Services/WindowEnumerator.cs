@@ -109,7 +109,7 @@ public class WindowEnumerator
 
         if (!Directory.Exists(taskbarPath))
         {
-            LogService.Instance.Warning($"TaskbarPin: 任务栏固定目录不存在: {taskbarPath}");
+            LogService.Instance.Warning($"TaskbarPin: 目录不存在: {taskbarPath}");
             return IntPtr.Zero;
         }
 
@@ -117,64 +117,60 @@ public class WindowEnumerator
             .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        if (lnkFiles.Count == 0)
+        {
+            LogService.Instance.Warning("TaskbarPin: 未找到任何固定程序快捷方式");
+            return IntPtr.Zero;
+        }
+
         if (rule.TaskbarSlot < 1 || rule.TaskbarSlot > lnkFiles.Count)
         {
-            LogService.Instance.Warning($"TaskbarPin: 序号 {rule.TaskbarSlot} 超出范围 (1-{lnkFiles.Count})");
+            LogService.Instance.Warning($"TaskbarPin: 序号 {rule.TaskbarSlot} 超范围 (1-{lnkFiles.Count})");
             return IntPtr.Zero;
         }
 
         var lnkFile = lnkFiles[rule.TaskbarSlot - 1];
-        var processName = ResolveShortcutTarget(lnkFile);
-        if (string.IsNullOrEmpty(processName))
+        var targetPath = ResolveShortcutTarget(lnkFile);
+        if (string.IsNullOrEmpty(targetPath))
         {
-            LogService.Instance.Warning($"TaskbarPin: 无法解析快捷方式: {lnkFile}");
+            LogService.Instance.Warning($"TaskbarPin: 无法解析: {lnkFile}");
             return IntPtr.Zero;
         }
 
-        LogService.Instance.Info($"TaskbarPin: 序号 {rule.TaskbarSlot} -> {processName}");
+        var processName = Path.GetFileNameWithoutExtension(targetPath);
+        LogService.Instance.Info($"TaskbarPin: 序号 {rule.TaskbarSlot} -> {targetPath} -> {processName}");
 
         var windows = FindWindowsByProcess(processName);
-        if (windows.Count == 0)
-        {
-            var baseName = Path.GetFileNameWithoutExtension(processName);
-            windows = FindWindowsByProcess(baseName);
-        }
+        if (windows.Count > 0) return windows[0].Handle;
 
-        return windows.FirstOrDefault()?.Handle ?? IntPtr.Zero;
+        // 尝试带 .exe 后缀
+        windows = FindWindowsByProcess(processName + ".exe");
+        if (windows.Count > 0) return windows[0].Handle;
+
+        LogService.Instance.Warning($"TaskbarPin: 未找到进程 {processName} 的窗口");
+        return IntPtr.Zero;
     }
 
     /// <summary>
-    /// 解析 .lnk 快捷方式的目标文件（使用 IShellLink COM 接口）
+    /// 解析 .lnk 快捷方式的目标文件路径（使用 WScript.Shell COM）
     /// </summary>
     private static string ResolveShortcutTarget(string lnkPath)
     {
         try
         {
-            // IShellLinkW CLSID
-            var shellLinkType = Type.GetTypeFromCLSID(new Guid("00021401-0000-0000-C000-000000000046"));
-            if (shellLinkType == null) return string.Empty;
+            var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType == null) return string.Empty;
 
-            var shellLink = Activator.CreateInstance(shellLinkType);
-            if (shellLink == null) return string.Empty;
+            dynamic? shell = Activator.CreateInstance(shellType);
+            if (shell == null) return string.Empty;
 
-            // IPersistFile
-            var persistFile = (System.Runtime.InteropServices.ComTypes.IPersistFile)shellLink;
-            persistFile.Load(lnkPath, 0);
+            dynamic shortcut = shell.CreateShortcut(lnkPath);
+            var target = (string?)shortcut.TargetPath;
 
-            // IShellLinkW -> GetPath
-            var getPathMethod = shellLinkType.GetMethod("GetPath",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
-            if (getPathMethod == null) return string.Empty;
+            System.Runtime.InteropServices.Marshal.ReleaseComObject(shortcut);
+            System.Runtime.InteropServices.Marshal.ReleaseComObject(shell);
 
-            var sb = new System.Text.StringBuilder(260);
-            var path = sb;
-            var args = new object[] { path, 260, IntPtr.Zero, 0 };
-            getPathMethod.Invoke(shellLink, args);
-
-            // Release COM
-            System.Runtime.InteropServices.Marshal.ReleaseComObject(shellLink);
-
-            return args[0]?.ToString() ?? string.Empty;
+            return target ?? string.Empty;
         }
         catch (Exception ex)
         {
