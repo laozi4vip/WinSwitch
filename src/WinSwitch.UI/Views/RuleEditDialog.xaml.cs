@@ -263,38 +263,62 @@ public partial class RuleEditDialog : Window
     }
 
     private void UpdateTitleFieldsVisibility()
-        {
-            var isRuleMode = Rule.MatchMode == MatchMode.Rule;
-            var isProcessMode = Rule.MatchMode == MatchMode.ProcessName;
-            var isTaskbarPinMode = Rule.MatchMode == MatchMode.TaskbarPin;
+    {
+        var mode = Rule.MatchMode;
+        var isFixed = mode == MatchMode.Fixed;
+        var isRule = mode == MatchMode.Rule;
+        var isProcess = mode == MatchMode.ProcessName;
+        var isTaskbarPin = mode == MatchMode.TaskbarPin;
 
-            LblTitlePattern.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
-            TxtTitlePattern.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
-            LblTitleHint.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
-            LblTitleMatchType.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
-            CmbTitleMatchType.Visibility = isRuleMode ? Visibility.Visible : Visibility.Collapsed;
+        // 进程名：Fixed/Rule/ProcessName 显示，TaskbarPin 隐藏
+        var showProcessName = isFixed || isRule || isProcess;
+        LblProcessName.Visibility = showProcessName ? Visibility.Visible : Visibility.Collapsed;
+        TxtProcessName.Visibility = showProcessName ? Visibility.Visible : Visibility.Collapsed;
+        LblProcessNameHint.Visibility = showProcessName ? Visibility.Visible : Visibility.Collapsed;
 
-            // 任务栏固定模式：显示序号输入
-            LblTaskbarSlot.Visibility = isTaskbarPinMode ? Visibility.Visible : Visibility.Collapsed;
-            TxtTaskbarSlot.Visibility = isTaskbarPinMode ? Visibility.Visible : Visibility.Collapsed;
-            LblTaskbarSlotHint.Visibility = isTaskbarPinMode ? Visibility.Visible : Visibility.Collapsed;
+        // 进程名提示文字
+        if (isProcess)
+            LblProcessNameHint.Text = "按进程名匹配窗口，无需标题规则";
+        else if (isFixed)
+            LblProcessNameHint.Text = "固定绑定模式：首次匹配后锁定窗口句柄";
+        else if (isRule)
+            LblProcessNameHint.Text = "按进程名+标题规则匹配窗口";
+        else
+            LblProcessNameHint.Text = "";
 
-            // 程序名/任务栏固定模式下显示提示
-            if (isProcessMode)
-            {
-                LblProcessNameHint.Text = "程序名匹配模式：按进程名匹配窗口，无需标题规则";
-                LblProcessNameHint.Visibility = Visibility.Visible;
-            }
-            else if (isTaskbarPinMode)
-            {
-                LblProcessNameHint.Text = "任务栏快捷键模式：模拟 Win+数字键 激活任务栏对应位置的应用";
-                LblProcessNameHint.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                LblProcessNameHint.Visibility = Visibility.Collapsed;
-            }
-        }
+        // 标题规则+匹配方式：仅 Rule 模式显示
+        var showTitle = isRule;
+        LblTitlePattern.Visibility = showTitle ? Visibility.Visible : Visibility.Collapsed;
+        TxtTitlePattern.Visibility = showTitle ? Visibility.Visible : Visibility.Collapsed;
+        LblTitleHint.Visibility = showTitle ? Visibility.Visible : Visibility.Collapsed;
+        LblTitleMatchType.Visibility = showTitle ? Visibility.Visible : Visibility.Collapsed;
+        CmbTitleMatchType.Visibility = showTitle ? Visibility.Visible : Visibility.Collapsed;
+
+        // 浏览器匹配+URL：仅 Rule 模式显示
+        var showBrowser = isRule;
+        LblBrowserMatch.Visibility = showBrowser ? Visibility.Visible : Visibility.Collapsed;
+        CmbBrowserMatchMode.Visibility = showBrowser ? Visibility.Visible : Visibility.Collapsed;
+        LblUrlPattern.Visibility = showBrowser ? Visibility.Visible : Visibility.Collapsed;
+        TxtUrlPattern.Visibility = showBrowser ? Visibility.Visible : Visibility.Collapsed;
+        LblUrlHint.Visibility = showBrowser ? Visibility.Visible : Visibility.Collapsed;
+        LblUrlMatchType.Visibility = showBrowser ? Visibility.Visible : Visibility.Collapsed;
+        CmbUrlMatchType.Visibility = showBrowser ? Visibility.Visible : Visibility.Collapsed;
+
+        // 任务栏序号：仅 TaskbarPin 模式显示
+        LblTaskbarSlot.Visibility = isTaskbarPin ? Visibility.Visible : Visibility.Collapsed;
+        PnlTaskbarSlot.Visibility = isTaskbarPin ? Visibility.Visible : Visibility.Collapsed;
+
+        // 老板键：TaskbarPin 不需要
+        PnlBossKey.Visibility = isTaskbarPin ? Visibility.Collapsed : Visibility.Visible;
+
+        // 模式说明
+        LblModeHint.Visibility = isTaskbarPin ? Visibility.Visible : Visibility.Collapsed;
+        if (isTaskbarPin)
+            LblModeHint.Text = "此模式模拟 Windows 的 Win+数字键，行为与系统一致。任务栏顺序变化后关联也会随之变化。";
+
+        // 更新浏览器字段提示
+        UpdateBrowserFieldsVisibility();
+    }
 
         
     private void UpdateBrowserFieldsVisibility()

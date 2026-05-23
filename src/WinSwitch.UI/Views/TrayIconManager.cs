@@ -148,6 +148,13 @@ public class TrayIconManager : IDisposable
 
             window.Show();
             window.Activate();
+
+            // 确保窗口居中显示，避免每次从托盘打开都在左上角
+            window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            // 已创建的窗口需要手动居中
+            var screen = System.Windows.SystemParameters.WorkArea;
+            window.Left = (screen.Width - window.ActualWidth) / 2 + screen.Left;
+            window.Top = (screen.Height - window.ActualHeight) / 2 + screen.Top;
         }
     }
 
